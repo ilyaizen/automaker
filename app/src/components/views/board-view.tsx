@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -43,7 +43,7 @@ import { KanbanColumn } from "./kanban-column";
 import { KanbanCard } from "./kanban-card";
 import { AutoModeLog } from "./auto-mode-log";
 import { AgentOutputModal } from "./agent-output-modal";
-import { Plus, RefreshCw, Play, StopCircle, Loader2, ChevronUp, ChevronDown, Users } from "lucide-react";
+import { Plus, RefreshCw, Play, StopCircle, Loader2, ChevronUp, ChevronDown, Users, Trash2, FastForward } from "lucide-react";
 import { toast } from "sonner";
 import { Slider } from "@/components/ui/slider";
 import { useAutoMode } from "@/hooks/use-auto-mode";
@@ -89,6 +89,7 @@ export function BoardView() {
   const [showOutputModal, setShowOutputModal] = useState(false);
   const [outputFeature, setOutputFeature] = useState<Feature | null>(null);
   const [featuresWithContext, setFeaturesWithContext] = useState<Set<string>>(new Set());
+  const [showDeleteAllVerifiedDialog, setShowDeleteAllVerifiedDialog] = useState(false);
 
   // Make current project available globally for modal
   useEffect(() => {
@@ -103,16 +104,50 @@ export function BoardView() {
   // Auto mode hook
   const autoMode = useAutoMode();
 
+  // Get in-progress features for keyboard shortcuts (memoized for shortcuts)
+  const inProgressFeaturesForShortcuts = useMemo(() => {
+    return features.filter((f) => {
+      const isRunning = runningAutoTasks.includes(f.id);
+      return isRunning || f.status === "in_progress";
+    });
+  }, [features, runningAutoTasks]);
+
+  // Ref to hold the start next callback (to avoid dependency issues)
+  const startNextFeaturesRef = useRef<() => void>(() => {});
+
   // Keyboard shortcuts for this view
   const boardShortcuts: KeyboardShortcut[] = useMemo(
-    () => [
-      {
-        key: ACTION_SHORTCUTS.addFeature,
-        action: () => setShowAddDialog(true),
-        description: "Add new feature",
-      },
-    ],
-    []
+    () => {
+      const shortcuts: KeyboardShortcut[] = [
+        {
+          key: ACTION_SHORTCUTS.addFeature,
+          action: () => setShowAddDialog(true),
+          description: "Add new feature",
+        },
+        {
+          key: ACTION_SHORTCUTS.startNext,
+          action: () => startNextFeaturesRef.current(),
+          description: "Start next features from backlog",
+        },
+      ];
+
+      // Add shortcuts for in-progress cards (1-9 and 0 for 10th)
+      inProgressFeaturesForShortcuts.slice(0, 10).forEach((feature, index) => {
+        // Keys 1-9 for first 9 cards, 0 for 10th card
+        const key = index === 9 ? "0" : String(index + 1);
+        shortcuts.push({
+          key,
+          action: () => {
+            setOutputFeature(feature);
+            setShowOutputModal(true);
+          },
+          description: `View output for in-progress card ${index + 1}`,
+        });
+      });
+
+      return shortcuts;
+    },
+    [inProgressFeaturesForShortcuts]
   );
   useKeyboardShortcuts(boardShortcuts);
 
@@ -561,6 +596,44 @@ export function BoardView() {
     }
   };
 
+  // Start next features from backlog up to the concurrency limit
+  const handleStartNextFeatures = useCallback(async () => {
+    const backlogFeatures = features.filter((f) => f.status === "backlog");
+    const availableSlots = maxConcurrency - runningAutoTasks.length;
+
+    if (availableSlots <= 0) {
+      toast.error("Concurrency limit reached", {
+        description: `You can only have ${maxConcurrency} task${maxConcurrency > 1 ? "s" : ""} running at a time. Wait for a task to complete or increase the limit.`,
+      });
+      return;
+    }
+
+    if (backlogFeatures.length === 0) {
+      toast.info("No features in backlog", {
+        description: "Add features to the backlog first.",
+      });
+      return;
+    }
+
+    const featuresToStart = backlogFeatures.slice(0, availableSlots);
+
+    for (const feature of featuresToStart) {
+      // Update the feature status with startedAt timestamp
+      updateFeature(feature.id, { status: "in_progress", startedAt: new Date().toISOString() });
+      // Start the agent for this feature
+      await handleRunFeature(feature);
+    }
+
+    toast.success(`Started ${featuresToStart.length} feature${featuresToStart.length > 1 ? "s" : ""}`, {
+      description: featuresToStart.map((f) => f.description.slice(0, 30) + (f.description.length > 30 ? "..." : "")).join(", "),
+    });
+  }, [features, maxConcurrency, runningAutoTasks.length, updateFeature]);
+
+  // Update ref when handleStartNextFeatures changes
+  useEffect(() => {
+    startNextFeaturesRef.current = handleStartNextFeatures;
+  }, [handleStartNextFeatures]);
+
   if (!currentProject) {
     return (
       <div
@@ -666,15 +739,6 @@ export function BoardView() {
           )}
 
           <Button
-            variant="outline"
-            size="sm"
-            onClick={loadFeatures}
-            data-testid="refresh-board"
-          >
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh
-          </Button>
-          <Button
             size="sm"
             onClick={() => setShowAddDialog(true)}
             data-testid="add-feature-button"
@@ -715,25 +779,61 @@ export function BoardView() {
                   color={column.color}
                   count={columnFeatures.length}
                   isDoubleWidth={column.id === "in_progress"}
+                  headerAction={
+                    column.id === "verified" && columnFeatures.length > 0 ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => setShowDeleteAllVerifiedDialog(true)}
+                        data-testid="delete-all-verified-button"
+                      >
+                        <Trash2 className="w-3 h-3 mr-1" />
+                        Delete All
+                      </Button>
+                    ) : column.id === "backlog" && columnFeatures.length > 0 ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs text-primary hover:text-primary hover:bg-primary/10"
+                        onClick={handleStartNextFeatures}
+                        data-testid="start-next-button"
+                      >
+                        <FastForward className="w-3 h-3 mr-1" />
+                        Start Next
+                        <span className="ml-1 px-1 py-0.5 text-[9px] font-mono rounded bg-white/10 border border-white/20">
+                          {ACTION_SHORTCUTS.startNext}
+                        </span>
+                      </Button>
+                    ) : undefined
+                  }
                 >
                   <SortableContext
                     items={columnFeatures.map((f) => f.id)}
                     strategy={verticalListSortingStrategy}
                   >
-                    {columnFeatures.map((feature) => (
-                      <KanbanCard
-                        key={feature.id}
-                        feature={feature}
-                        onEdit={() => setEditingFeature(feature)}
-                        onDelete={() => handleDeleteFeature(feature.id)}
-                        onViewOutput={() => handleViewOutput(feature)}
-                        onVerify={() => handleVerifyFeature(feature)}
-                        onResume={() => handleResumeFeature(feature)}
-                        onForceStop={() => handleForceStopFeature(feature)}
-                        hasContext={featuresWithContext.has(feature.id)}
-                        isCurrentAutoTask={runningAutoTasks.includes(feature.id)}
-                      />
-                    ))}
+                    {columnFeatures.map((feature, index) => {
+                      // Calculate shortcut key for in-progress cards (first 10 get 1-9, 0)
+                      let shortcutKey: string | undefined;
+                      if (column.id === "in_progress" && index < 10) {
+                        shortcutKey = index === 9 ? "0" : String(index + 1);
+                      }
+                      return (
+                        <KanbanCard
+                          key={feature.id}
+                          feature={feature}
+                          onEdit={() => setEditingFeature(feature)}
+                          onDelete={() => handleDeleteFeature(feature.id)}
+                          onViewOutput={() => handleViewOutput(feature)}
+                          onVerify={() => handleVerifyFeature(feature)}
+                          onResume={() => handleResumeFeature(feature)}
+                          onForceStop={() => handleForceStopFeature(feature)}
+                          hasContext={featuresWithContext.has(feature.id)}
+                          isCurrentAutoTask={runningAutoTasks.includes(feature.id)}
+                          shortcutKey={shortcutKey}
+                        />
+                      );
+                    })}
                   </SortableContext>
                 </KanbanColumn>
               );
@@ -937,6 +1037,59 @@ export function BoardView() {
         featureDescription={outputFeature?.description || ""}
         featureId={outputFeature?.id || ""}
       />
+
+      {/* Delete All Verified Dialog */}
+      <Dialog open={showDeleteAllVerifiedDialog} onOpenChange={setShowDeleteAllVerifiedDialog}>
+        <DialogContent data-testid="delete-all-verified-dialog">
+          <DialogHeader>
+            <DialogTitle>Delete All Verified Features</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete all verified features? This action cannot be undone.
+              {getColumnFeatures("verified").length > 0 && (
+                <span className="block mt-2 text-yellow-500">
+                  {getColumnFeatures("verified").length} feature(s) will be deleted.
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowDeleteAllVerifiedDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                const verifiedFeatures = getColumnFeatures("verified");
+                for (const feature of verifiedFeatures) {
+                  // Check if the feature is currently running
+                  const isRunning = runningAutoTasks.includes(feature.id);
+
+                  // If the feature is running, stop the agent first
+                  if (isRunning) {
+                    try {
+                      await autoMode.stopFeature(feature.id);
+                    } catch (error) {
+                      console.error("[Board] Error stopping feature before delete:", error);
+                    }
+                  }
+
+                  // Remove the feature
+                  removeFeature(feature.id);
+                }
+
+                setShowDeleteAllVerifiedDialog(false);
+                toast.success("All verified features deleted", {
+                  description: `Deleted ${verifiedFeatures.length} feature(s).`,
+                });
+              }}
+              data-testid="confirm-delete-all-verified"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete All
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
