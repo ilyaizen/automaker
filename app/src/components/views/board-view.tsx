@@ -44,7 +44,7 @@ import { KanbanColumn } from "./kanban-column";
 import { KanbanCard } from "./kanban-card";
 import { AutoModeLog } from "./auto-mode-log";
 import { AgentOutputModal } from "./agent-output-modal";
-import { Plus, RefreshCw, Play, StopCircle, Loader2, ChevronUp, ChevronDown, Users, Trash2, FastForward, FlaskConical, CheckCircle2 } from "lucide-react";
+import { Plus, RefreshCw, Play, StopCircle, Loader2, ChevronUp, ChevronDown, Users, Trash2, FastForward, FlaskConical, CheckCircle2, MessageSquare, GitCommit } from "lucide-react";
 import { toast } from "sonner";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -60,6 +60,7 @@ type ColumnId = Feature["status"];
 const COLUMNS: { id: ColumnId; title: string; color: string }[] = [
   { id: "backlog", title: "Backlog", color: "bg-zinc-500" },
   { id: "in_progress", title: "In Progress", color: "bg-yellow-500" },
+  { id: "waiting_approval", title: "Waiting Approval", color: "bg-orange-500" },
   { id: "verified", title: "Verified", color: "bg-green-500" },
 ];
 
@@ -95,6 +96,10 @@ export function BoardView() {
   const [featuresWithContext, setFeaturesWithContext] = useState<Set<string>>(new Set());
   const [showDeleteAllVerifiedDialog, setShowDeleteAllVerifiedDialog] = useState(false);
   const [persistedCategories, setPersistedCategories] = useState<string[]>([]);
+  const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
+  const [followUpFeature, setFollowUpFeature] = useState<Feature | null>(null);
+  const [followUpPrompt, setFollowUpPrompt] = useState("");
+  const [followUpImagePaths, setFollowUpImagePaths] = useState<DescriptionImagePath[]>([]);
 
   // Make current project available globally for modal
   useEffect(() => {
@@ -688,6 +693,125 @@ export function BoardView() {
     });
   };
 
+  // Open follow-up dialog for waiting_approval features
+  const handleOpenFollowUp = (feature: Feature) => {
+    console.log("[Board] Opening follow-up dialog for feature:", { id: feature.id, description: feature.description });
+    setFollowUpFeature(feature);
+    setFollowUpPrompt("");
+    setFollowUpImagePaths([]);
+    setShowFollowUpDialog(true);
+  };
+
+  // Handle sending follow-up prompt
+  const handleSendFollowUp = async () => {
+    if (!currentProject || !followUpFeature || !followUpPrompt.trim()) return;
+
+    console.log("[Board] Sending follow-up prompt for feature:", {
+      id: followUpFeature.id,
+      prompt: followUpPrompt,
+      imagePaths: followUpImagePaths
+    });
+
+    try {
+      const api = getElectronAPI();
+      if (!api?.autoMode?.followUpFeature) {
+        console.error("Follow-up feature API not available");
+        toast.error("Follow-up not available", {
+          description: "This feature is not available in the current version.",
+        });
+        return;
+      }
+
+      // Move feature back to in_progress before sending follow-up
+      updateFeature(followUpFeature.id, { status: "in_progress", startedAt: new Date().toISOString() });
+
+      // Call the API to send follow-up prompt
+      const result = await api.autoMode.followUpFeature(
+        currentProject.path,
+        followUpFeature.id,
+        followUpPrompt,
+        followUpImagePaths.map(img => img.path)
+      );
+
+      if (result.success) {
+        console.log("[Board] Follow-up started successfully");
+        toast.success("Follow-up started", {
+          description: `Continuing work on: ${followUpFeature.description.slice(0, 50)}${followUpFeature.description.length > 50 ? "..." : ""}`,
+        });
+        setShowFollowUpDialog(false);
+        setFollowUpFeature(null);
+        setFollowUpPrompt("");
+        setFollowUpImagePaths([]);
+      } else {
+        console.error("[Board] Failed to send follow-up:", result.error);
+        toast.error("Failed to send follow-up", {
+          description: result.error || "An error occurred",
+        });
+        await loadFeatures();
+      }
+    } catch (error) {
+      console.error("[Board] Error sending follow-up:", error);
+      toast.error("Failed to send follow-up", {
+        description: error instanceof Error ? error.message : "An error occurred",
+      });
+      await loadFeatures();
+    }
+  };
+
+  // Handle commit-only for waiting_approval features (marks as verified and commits)
+  const handleCommitFeature = async (feature: Feature) => {
+    if (!currentProject) return;
+
+    console.log("[Board] Committing feature:", { id: feature.id, description: feature.description });
+
+    try {
+      const api = getElectronAPI();
+      if (!api?.autoMode?.commitFeature) {
+        console.error("Commit feature API not available");
+        toast.error("Commit not available", {
+          description: "This feature is not available in the current version.",
+        });
+        return;
+      }
+
+      // Call the API to commit this feature
+      const result = await api.autoMode.commitFeature(
+        currentProject.path,
+        feature.id
+      );
+
+      if (result.success) {
+        console.log("[Board] Feature committed successfully");
+        // Move to verified status
+        moveFeature(feature.id, "verified");
+        toast.success("Feature committed", {
+          description: `Committed and verified: ${feature.description.slice(0, 50)}${feature.description.length > 50 ? "..." : ""}`,
+        });
+      } else {
+        console.error("[Board] Failed to commit feature:", result.error);
+        toast.error("Failed to commit feature", {
+          description: result.error || "An error occurred",
+        });
+        await loadFeatures();
+      }
+    } catch (error) {
+      console.error("[Board] Error committing feature:", error);
+      toast.error("Failed to commit feature", {
+        description: error instanceof Error ? error.message : "An error occurred",
+      });
+      await loadFeatures();
+    }
+  };
+
+  // Move feature to waiting_approval (for skipTests features when agent completes)
+  const handleMoveToWaitingApproval = (feature: Feature) => {
+    console.log("[Board] Moving feature to waiting_approval:", { id: feature.id, description: feature.description });
+    updateFeature(feature.id, { status: "waiting_approval" });
+    toast.info("Feature ready for review", {
+      description: `Ready for approval: ${feature.description.slice(0, 50)}${feature.description.length > 50 ? "..." : ""}`,
+    });
+  };
+
   const checkContextExists = async (featureId: string): Promise<boolean> => {
     if (!currentProject) return false;
 
@@ -1000,6 +1124,8 @@ export function BoardView() {
                           onForceStop={() => handleForceStopFeature(feature)}
                           onManualVerify={() => handleManualVerify(feature)}
                           onMoveBackToInProgress={() => handleMoveBackToInProgress(feature)}
+                          onFollowUp={() => handleOpenFollowUp(feature)}
+                          onCommit={() => handleCommitFeature(feature)}
                           hasContext={featuresWithContext.has(feature.id)}
                           isCurrentAutoTask={runningAutoTasks.includes(feature.id)}
                           shortcutKey={shortcutKey}
@@ -1314,6 +1440,77 @@ export function BoardView() {
             >
               <Trash2 className="w-4 h-4 mr-2" />
               Delete All
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Follow-Up Prompt Dialog */}
+      <Dialog open={showFollowUpDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowFollowUpDialog(false);
+          setFollowUpFeature(null);
+          setFollowUpPrompt("");
+          setFollowUpImagePaths([]);
+        }
+      }}>
+        <DialogContent
+          data-testid="follow-up-dialog"
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && followUpPrompt.trim()) {
+              e.preventDefault();
+              handleSendFollowUp();
+            }
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Follow-Up Prompt</DialogTitle>
+            <DialogDescription>
+              Send additional instructions to continue working on this feature.
+              {followUpFeature && (
+                <span className="block mt-2 text-primary">
+                  Feature: {followUpFeature.description.slice(0, 100)}{followUpFeature.description.length > 100 ? "..." : ""}
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="follow-up-prompt">Instructions</Label>
+              <DescriptionImageDropZone
+                value={followUpPrompt}
+                onChange={setFollowUpPrompt}
+                images={followUpImagePaths}
+                onImagesChange={setFollowUpImagePaths}
+                placeholder="Describe what needs to be fixed or changed..."
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              The agent will continue from where it left off, using the existing context.
+              You can attach screenshots to help explain the issue.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => {
+              setShowFollowUpDialog(false);
+              setFollowUpFeature(null);
+              setFollowUpPrompt("");
+              setFollowUpImagePaths([]);
+            }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSendFollowUp}
+              disabled={!followUpPrompt.trim()}
+              data-testid="confirm-follow-up"
+            >
+              <MessageSquare className="w-4 h-4 mr-2" />
+              Send Follow-Up
+              <span
+                className="ml-2 px-1.5 py-0.5 text-[10px] font-mono rounded bg-white/10 border border-white/20"
+              >
+                ⌘↵
+              </span>
             </Button>
           </DialogFooter>
         </DialogContent>

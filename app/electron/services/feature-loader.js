@@ -51,13 +51,29 @@ class FeatureLoader {
       ".automaker",
       "feature_list.json"
     );
-    const toSave = features.map((f) => ({
-      id: f.id,
-      category: f.category,
-      description: f.description,
-      steps: f.steps,
-      status: f.status,
-    }));
+    const toSave = features.map((f) => {
+      const featureData = {
+        id: f.id,
+        category: f.category,
+        description: f.description,
+        steps: f.steps,
+        status: f.status,
+      };
+      // Preserve optional fields if they exist
+      if (f.skipTests !== undefined) {
+        featureData.skipTests = f.skipTests;
+      }
+      if (f.images !== undefined) {
+        featureData.images = f.images;
+      }
+      if (f.imagePaths !== undefined) {
+        featureData.imagePaths = f.imagePaths;
+      }
+      if (f.startedAt !== undefined) {
+        featureData.startedAt = f.startedAt;
+      }
+      return featureData;
+    });
 
     await fs.writeFile(featuresPath, JSON.stringify(toSave, null, 2), "utf-8");
     console.log(`[FeatureLoader] Updated feature ${featureId}: status=${status}`);
@@ -65,11 +81,12 @@ class FeatureLoader {
 
   /**
    * Select the next feature to implement
-   * Prioritizes: earlier features in the list that are not verified
+   * Prioritizes: earlier features in the list that are not verified or waiting_approval
    */
   selectNextFeature(features) {
     // Find first feature that is in backlog or in_progress status
-    return features.find((f) => f.status !== "verified");
+    // Skip verified and waiting_approval (which needs user input)
+    return features.find((f) => f.status !== "verified" && f.status !== "waiting_approval");
   }
 }
 

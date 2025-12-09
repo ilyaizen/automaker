@@ -34,6 +34,8 @@ import {
   StopCircle,
   FlaskConical,
   ArrowLeft,
+  MessageSquare,
+  GitCommit,
 } from "lucide-react";
 import { CountUpTimer } from "@/components/ui/count-up-timer";
 
@@ -47,6 +49,8 @@ interface KanbanCardProps {
   onForceStop?: () => void;
   onManualVerify?: () => void;
   onMoveBackToInProgress?: () => void;
+  onFollowUp?: () => void;
+  onCommit?: () => void;
   hasContext?: boolean;
   isCurrentAutoTask?: boolean;
   shortcutKey?: string;
@@ -62,6 +66,8 @@ export function KanbanCard({
   onForceStop,
   onManualVerify,
   onMoveBackToInProgress,
+  onFollowUp,
+  onCommit,
   hasContext,
   isCurrentAutoTask,
   shortcutKey,
@@ -359,6 +365,51 @@ export function KanbanCard({
                 className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
                 onClick={handleDeleteClick}
                 data-testid={`delete-feature-${feature.id}`}
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            </>
+          )}
+          {!isCurrentAutoTask && feature.status === "waiting_approval" && (
+            <>
+              {/* Follow-up prompt button */}
+              {onFollowUp && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="flex-1 h-7 text-xs bg-blue-600 hover:bg-blue-700"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFollowUp();
+                  }}
+                  data-testid={`follow-up-${feature.id}`}
+                >
+                  <MessageSquare className="w-3 h-3 mr-1" />
+                  Follow-up
+                </Button>
+              )}
+              {/* Commit and verify button */}
+              {onCommit && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="flex-1 h-7 text-xs bg-green-600 hover:bg-green-700"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCommit();
+                  }}
+                  data-testid={`commit-${feature.id}`}
+                >
+                  <GitCommit className="w-3 h-3 mr-1" />
+                  Commit
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={handleDeleteClick}
+                data-testid={`delete-waiting-feature-${feature.id}`}
               >
                 <Trash2 className="w-3 h-3" />
               </Button>

@@ -6,6 +6,10 @@ class PromptBuilder {
    * Build the prompt for implementing a specific feature
    */
   buildFeaturePrompt(feature) {
+    const skipTestsNote = feature.skipTests 
+      ? `\n**⚠️ IMPORTANT - Manual Testing Mode:**\nThis feature has skipTests=true, which means:\n- DO NOT commit changes automatically\n- DO NOT mark as verified - it will automatically go to "waiting_approval" status\n- The user will manually review and commit the changes\n- Just implement the feature and mark it as verified (it will be converted to waiting_approval)\n`
+      : "";
+
     return `You are working on a feature implementation task.
 
 **Current Feature to Implement:**
@@ -13,7 +17,7 @@ class PromptBuilder {
 ID: ${feature.id}
 Category: ${feature.category}
 Description: ${feature.description}
-
+${skipTestsNote}
 **Steps to Complete:**
 ${feature.steps.map((step, i) => `${i + 1}. ${step}`).join("\n")}
 
@@ -21,30 +25,34 @@ ${feature.steps.map((step, i) => `${i + 1}. ${step}`).join("\n")}
 
 1. Read the project files to understand the current codebase structure
 2. Implement the feature according to the description and steps
-3. Write Playwright tests to verify the feature works correctly
-4. Run the tests and ensure they pass
-5. **DELETE the test file(s) you created** - tests are only for immediate verification
-6. **CRITICAL: Use the UpdateFeatureStatus tool to mark this feature as verified** - DO NOT manually edit .automaker/feature_list.json
-7. Commit your changes with git
+${feature.skipTests 
+  ? "3. Test the implementation manually (no automated tests needed for skipTests features)"
+  : "3. Write Playwright tests to verify the feature works correctly\n4. Run the tests and ensure they pass\n5. **DELETE the test file(s) you created** - tests are only for immediate verification"}
+${feature.skipTests ? "4" : "6"}. **CRITICAL: Use the UpdateFeatureStatus tool to mark this feature as verified** - DO NOT manually edit .automaker/feature_list.json
+${feature.skipTests 
+  ? "5. **DO NOT commit changes** - the user will review and commit manually"
+  : "7. Commit your changes with git"}
 
 **IMPORTANT - Updating Feature Status:**
 
-When you have completed the feature and all tests pass, you MUST use the \`mcp__automaker-tools__UpdateFeatureStatus\` tool to update the feature status:
+When you have completed the feature${feature.skipTests ? "" : " and all tests pass"}, you MUST use the \`mcp__automaker-tools__UpdateFeatureStatus\` tool to update the feature status:
 - Call the tool with: featureId="${feature.id}" and status="verified"
 - **DO NOT manually edit the .automaker/feature_list.json file** - this can cause race conditions
 - The UpdateFeatureStatus tool safely updates the feature status without risk of corrupting other data
+- **If skipTests=true, the tool will automatically convert "verified" to "waiting_approval"** - this is correct behavior
 
 **Important Guidelines:**
 
 - Focus ONLY on implementing this specific feature
 - Write clean, production-quality code
 - Add proper error handling
-- Write comprehensive Playwright tests
-- Ensure all existing tests still pass
-- Mark the feature as passing only when all tests are green
-- **CRITICAL: Delete test files after verification** - tests accumulate and become brittle
+${feature.skipTests 
+  ? "- Skip automated testing (skipTests=true) - user will manually verify"
+  : "- Write comprehensive Playwright tests\n- Ensure all existing tests still pass\n- Mark the feature as passing only when all tests are green\n- **CRITICAL: Delete test files after verification** - tests accumulate and become brittle"}
 - **CRITICAL: Use UpdateFeatureStatus tool instead of editing feature_list.json directly**
-- Make a git commit when complete
+${feature.skipTests 
+  ? "- **DO NOT commit changes** - user will review and commit manually"
+  : "- Make a git commit when complete"}
 
 **Testing Utilities (CRITICAL):**
 
@@ -75,6 +83,10 @@ Begin by reading the project structure and then implementing the feature.`;
    * Build the prompt for verifying a specific feature
    */
   buildVerificationPrompt(feature) {
+    const skipTestsNote = feature.skipTests 
+      ? `\n**⚠️ IMPORTANT - Manual Testing Mode:**\nThis feature has skipTests=true, which means:\n- DO NOT commit changes automatically\n- DO NOT mark as verified - it will automatically go to "waiting_approval" status\n- The user will manually review and commit the changes\n- Just implement the feature and mark it as verified (it will be converted to waiting_approval)\n`
+      : "";
+
     return `You are implementing and verifying a feature until it is complete and working correctly.
 
 **Feature to Implement/Verify:**
@@ -83,7 +95,7 @@ ID: ${feature.id}
 Category: ${feature.category}
 Description: ${feature.description}
 Current Status: ${feature.status}
-
+${skipTestsNote}
 **Steps that should be implemented:**
 ${feature.steps.map((step, i) => `${i + 1}. ${step}`).join("\n")}
 
@@ -91,7 +103,9 @@ ${feature.steps.map((step, i) => `${i + 1}. ${step}`).join("\n")}
 
 1. Read the project files to understand the current implementation
 2. If the feature is not fully implemented, continue implementing it
-3. Write or update Playwright tests to verify the feature works correctly
+${feature.skipTests 
+  ? "3. Test the implementation manually (no automated tests needed for skipTests features)"
+  : `3. Write or update Playwright tests to verify the feature works correctly
 4. Run the Playwright tests: npx playwright test tests/[feature-name].spec.ts
 5. Check if all tests pass
 6. **If ANY tests fail:**
@@ -101,17 +115,19 @@ ${feature.steps.map((step, i) => `${i + 1}. ${step}`).join("\n")}
    - Re-run the tests to verify the fixes
    - **REPEAT this process until ALL tests pass**
 7. **If ALL tests pass:**
-   - **DELETE the test file(s) for this feature** - tests are only for immediate verification
-   - **CRITICAL: Use the UpdateFeatureStatus tool to mark this feature as verified** - DO NOT manually edit .automaker/feature_list.json
-   - Explain what was implemented/fixed and that all tests passed
-   - Commit your changes with git
+   - **DELETE the test file(s) for this feature** - tests are only for immediate verification`}
+${feature.skipTests ? "4" : "8"}. **CRITICAL: Use the UpdateFeatureStatus tool to mark this feature as verified** - DO NOT manually edit .automaker/feature_list.json
+${feature.skipTests 
+  ? "5. **DO NOT commit changes** - the user will review and commit manually"
+  : "9. Explain what was implemented/fixed and that all tests passed\n10. Commit your changes with git"}
 
 **IMPORTANT - Updating Feature Status:**
 
-When all tests pass, you MUST use the \`mcp__automaker-tools__UpdateFeatureStatus\` tool to update the feature status:
+When you have completed the feature${feature.skipTests ? "" : " and all tests pass"}, you MUST use the \`mcp__automaker-tools__UpdateFeatureStatus\` tool to update the feature status:
 - Call the tool with: featureId="${feature.id}" and status="verified"
 - **DO NOT manually edit the .automaker/feature_list.json file** - this can cause race conditions
 - The UpdateFeatureStatus tool safely updates the feature status without risk of corrupting other data
+- **If skipTests=true, the tool will automatically convert "verified" to "waiting_approval"** - this is correct behavior
 
 **Testing Utilities:**
 - Check if tests/utils.ts exists and is being used
@@ -126,13 +142,10 @@ rm tests/[feature-name].spec.ts
 \`\`\`
 
 **Important:**
-- **CONTINUE IMPLEMENTING until all tests pass** - don't stop at the first failure
-- Only mark as "verified" if Playwright tests pass
-- **CRITICAL: Delete test files after they pass** - tests should not accumulate
+${feature.skipTests 
+  ? "- Skip automated testing (skipTests=true) - user will manually verify\n- **DO NOT commit changes** - user will review and commit manually"
+  : "- **CONTINUE IMPLEMENTING until all tests pass** - don't stop at the first failure\n- Only mark as verified if Playwright tests pass\n- **CRITICAL: Delete test files after they pass** - tests should not accumulate\n- Update test utilities if functionality changed\n- Make a git commit when the feature is complete\n- Be thorough and persistent in fixing issues"}
 - **CRITICAL: Use UpdateFeatureStatus tool instead of editing feature_list.json directly**
-- Update test utilities if functionality changed
-- Make a git commit when the feature is complete
-- Be thorough and persistent in fixing issues
 
 Begin by reading the project structure and understanding what needs to be implemented or fixed.`;
   }
@@ -141,6 +154,10 @@ Begin by reading the project structure and understanding what needs to be implem
    * Build prompt for resuming feature with previous context
    */
   buildResumePrompt(feature, previousContext) {
+    const skipTestsNote = feature.skipTests 
+      ? `\n**⚠️ IMPORTANT - Manual Testing Mode:**\nThis feature has skipTests=true, which means:\n- DO NOT commit changes automatically\n- DO NOT mark as verified - it will automatically go to "waiting_approval" status\n- The user will manually review and commit the changes\n- Just implement the feature and mark it as verified (it will be converted to waiting_approval)\n`
+      : "";
+
     return `You are resuming work on a feature implementation that was previously started.
 
 **Current Feature:**
@@ -148,7 +165,7 @@ Begin by reading the project structure and understanding what needs to be implem
 ID: ${feature.id}
 Category: ${feature.category}
 Description: ${feature.description}
-
+${skipTestsNote}
 **Steps to Complete:**
 ${feature.steps.map((step, i) => `${i + 1}. ${step}`).join("\n")}
 
@@ -162,29 +179,34 @@ Continue where you left off and complete the feature implementation:
 
 1. Review the previous work context above to understand what has been done
 2. Continue implementing the feature according to the description and steps
-3. Write Playwright tests to verify the feature works correctly (if not already done)
-4. Run the tests and ensure they pass
-5. **DELETE the test file(s) you created** - tests are only for immediate verification
-6. **CRITICAL: Use the UpdateFeatureStatus tool to mark this feature as verified** - DO NOT manually edit .automaker/feature_list.json
-7. Commit your changes with git
+${feature.skipTests 
+  ? "3. Test the implementation manually (no automated tests needed for skipTests features)"
+  : "3. Write Playwright tests to verify the feature works correctly (if not already done)\n4. Run the tests and ensure they pass\n5. **DELETE the test file(s) you created** - tests are only for immediate verification"}
+${feature.skipTests ? "4" : "6"}. **CRITICAL: Use the UpdateFeatureStatus tool to mark this feature as verified** - DO NOT manually edit .automaker/feature_list.json
+${feature.skipTests 
+  ? "5. **DO NOT commit changes** - the user will review and commit manually"
+  : "7. Commit your changes with git"}
 
 **IMPORTANT - Updating Feature Status:**
 
-When all tests pass, you MUST use the \`mcp__automaker-tools__UpdateFeatureStatus\` tool to update the feature status:
+When you have completed the feature${feature.skipTests ? "" : " and all tests pass"}, you MUST use the \`mcp__automaker-tools__UpdateFeatureStatus\` tool to update the feature status:
 - Call the tool with: featureId="${feature.id}" and status="verified"
 - **DO NOT manually edit the .automaker/feature_list.json file** - this can cause race conditions
 - The UpdateFeatureStatus tool safely updates the feature status without risk of corrupting other data
+- **If skipTests=true, the tool will automatically convert "verified" to "waiting_approval"** - this is correct behavior
 
 **Important Guidelines:**
 
 - Review what was already done in the previous context
 - Don't redo work that's already complete - continue from where it left off
 - Focus on completing any remaining tasks
-- Write comprehensive Playwright tests if not already done
-- Ensure all tests pass before marking as verified
-- **CRITICAL: Delete test files after verification**
+${feature.skipTests 
+  ? "- Skip automated testing (skipTests=true) - user will manually verify"
+  : "- Write comprehensive Playwright tests if not already done\n- Ensure all tests pass before marking as verified\n- **CRITICAL: Delete test files after verification**"}
 - **CRITICAL: Use UpdateFeatureStatus tool instead of editing feature_list.json directly**
-- Make a git commit when complete
+${feature.skipTests 
+  ? "- **DO NOT commit changes** - user will review and commit manually"
+  : "- Make a git commit when complete"}
 
 Begin by assessing what's been done and what remains to be completed.`;
   }
@@ -278,18 +300,27 @@ Begin by exploring the project structure.`;
 Your role is to:
 - Implement features exactly as specified
 - Write production-quality code
-- Create comprehensive Playwright tests using testing utilities
-- Ensure all tests pass before marking features complete
-- **DELETE test files after successful verification** - tests are only for immediate feature verification
+- Check if feature.skipTests is true - if so, skip automated testing and don't commit
+- Create comprehensive Playwright tests using testing utilities (only if skipTests is false)
+- Ensure all tests pass before marking features complete (only if skipTests is false)
+- **DELETE test files after successful verification** - tests are only for immediate feature verification (only if skipTests is false)
 - **Use the UpdateFeatureStatus tool to mark features as verified** - NEVER manually edit feature_list.json
-- Commit working code to git
+- Commit working code to git (only if skipTests is false - skipTests features require manual review)
 - Be thorough and detail-oriented
 
+**IMPORTANT - Manual Testing Mode (skipTests=true):**
+If a feature has skipTests=true:
+- DO NOT write automated tests
+- DO NOT commit changes - the user will review and commit manually
+- Still mark the feature as verified using UpdateFeatureStatus - it will automatically convert to "waiting_approval" for manual review
+- The user will manually verify and commit the changes
+
 **IMPORTANT - UpdateFeatureStatus Tool:**
-You have access to the \`mcp__automaker-tools__UpdateFeatureStatus\` tool. When all tests pass, use this tool to update the feature status:
+You have access to the \`mcp__automaker-tools__UpdateFeatureStatus\` tool. When the feature is complete${""} (and all tests pass if skipTests is false), use this tool to update the feature status:
 - Call with featureId and status="verified"
 - **DO NOT manually edit .automaker/feature_list.json** - this can cause race conditions and restore old state
 - The tool safely updates the status without corrupting other feature data
+- **If skipTests=true, the tool will automatically convert "verified" to "waiting_approval"** - this is correct
 
 **Testing Utilities (CRITICAL):**
 - **Create and maintain tests/utils.ts** with helper functions for finding elements and common operations
@@ -327,21 +358,30 @@ Focus on one feature at a time and complete it fully before finishing. Always de
 
 Your role is to:
 - **Continue implementing features until they are complete** - don't stop at the first failure
-- Write or update code to fix failing tests
-- Run Playwright tests to verify feature implementations
-- If tests fail, analyze errors and fix the implementation
-- If other tests fail, verify if those tests are still accurate or should be updated or deleted
-- Continue rerunning tests and fixing issues until ALL tests pass
-- **DELETE test files after successful verification** - tests are only for immediate feature verification
+- Check if feature.skipTests is true - if so, skip automated testing and don't commit
+- Write or update code to fix failing tests (only if skipTests is false)
+- Run Playwright tests to verify feature implementations (only if skipTests is false)
+- If tests fail, analyze errors and fix the implementation (only if skipTests is false)
+- If other tests fail, verify if those tests are still accurate or should be updated or deleted (only if skipTests is false)
+- Continue rerunning tests and fixing issues until ALL tests pass (only if skipTests is false)
+- **DELETE test files after successful verification** - tests are only for immediate feature verification (only if skipTests is false)
 - **Use the UpdateFeatureStatus tool to mark features as verified** - NEVER manually edit feature_list.json
-- **Update test utilities (tests/utils.ts) if functionality changed** - keep helpers in sync with code
-- Commit working code to git
+- **Update test utilities (tests/utils.ts) if functionality changed** - keep helpers in sync with code (only if skipTests is false)
+- Commit working code to git (only if skipTests is false - skipTests features require manual review)
+
+**IMPORTANT - Manual Testing Mode (skipTests=true):**
+If a feature has skipTests=true:
+- DO NOT write automated tests
+- DO NOT commit changes - the user will review and commit manually
+- Still mark the feature as verified using UpdateFeatureStatus - it will automatically convert to "waiting_approval" for manual review
+- The user will manually verify and commit the changes
 
 **IMPORTANT - UpdateFeatureStatus Tool:**
-You have access to the \`mcp__automaker-tools__UpdateFeatureStatus\` tool. When all tests pass, use this tool to update the feature status:
+You have access to the \`mcp__automaker-tools__UpdateFeatureStatus\` tool. When the feature is complete${""} (and all tests pass if skipTests is false), use this tool to update the feature status:
 - Call with featureId and status="verified"
 - **DO NOT manually edit .automaker/feature_list.json** - this can cause race conditions and restore old state
 - The tool safely updates the status without corrupting other feature data
+- **If skipTests=true, the tool will automatically convert "verified" to "waiting_approval"** - this is correct
 
 **Testing Utilities:**
 - Check if tests/utils.ts needs updates based on code changes

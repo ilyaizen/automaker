@@ -182,10 +182,12 @@ class FeatureExecutor {
         content: checkingMsg,
       });
 
-      // Re-load features to check if it was marked as verified
+      // Re-load features to check if it was marked as verified or waiting_approval (for skipTests)
       const updatedFeatures = await featureLoader.loadFeatures(projectPath);
       const updatedFeature = updatedFeatures.find((f) => f.id === feature.id);
-      const passes = updatedFeature?.status === "verified";
+      // For skipTests features, waiting_approval is also considered a success
+      const passes = updatedFeature?.status === "verified" || 
+                     (updatedFeature?.skipTests && updatedFeature?.status === "waiting_approval");
 
       // Send verification result
       const resultMsg = passes
@@ -312,10 +314,12 @@ class FeatureExecutor {
       execution.query = null;
       execution.abortController = null;
 
-      // Check if feature was marked as verified
+      // Check if feature was marked as verified or waiting_approval (for skipTests)
       const updatedFeatures = await featureLoader.loadFeatures(projectPath);
       const updatedFeature = updatedFeatures.find((f) => f.id === feature.id);
-      const passes = updatedFeature?.status === "verified";
+      // For skipTests features, waiting_approval is also considered a success
+      const passes = updatedFeature?.status === "verified" || 
+                     (updatedFeature?.skipTests && updatedFeature?.status === "waiting_approval");
 
       const finalMsg = passes
         ? "✓ Feature successfully verified and completed\n"
@@ -347,6 +351,138 @@ class FeatureExecutor {
       }
 
       console.error("[FeatureExecutor] Error resuming feature:", error);
+      if (execution) {
+        execution.abortController = null;
+        execution.query = null;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Commit changes for a feature without doing additional work
+   * Just runs git add and git commit with the feature description
+   */
+  async commitChangesOnly(feature, projectPath, sendToRenderer, execution) {
+    console.log(`[FeatureExecutor] Committing changes for: ${feature.description}`);
+
+    try {
+      const commitMessage = `\n📝 Committing changes for: ${feature.description}\n`;
+      await contextManager.writeToContextFile(projectPath, feature.id, commitMessage);
+
+      sendToRenderer({
+        type: "auto_mode_progress",
+        featureId: feature.id,
+        content: "Committing changes to git...",
+      });
+
+      const abortController = new AbortController();
+      execution.abortController = abortController;
+
+      // Create custom MCP server with UpdateFeatureStatus tool
+      const featureToolsServer = mcpServerFactory.createFeatureToolsServer(
+        featureLoader.updateFeatureStatus.bind(featureLoader),
+        projectPath
+      );
+
+      const options = {
+        model: "claude-sonnet-4-20250514", // Use sonnet for simple commit task
+        systemPrompt: `You are a git assistant. Your only task is to commit the current changes with a proper commit message.
+
+IMPORTANT RULES:
+- DO NOT modify any code
+- DO NOT write tests
+- DO NOT do anything except committing the existing changes
+- Use the git command line tools via Bash`,
+        maxTurns: 10, // Short limit for simple task
+        cwd: projectPath,
+        mcpServers: {
+          "automaker-tools": featureToolsServer
+        },
+        allowedTools: ["Bash", "mcp__automaker-tools__UpdateFeatureStatus"],
+        permissionMode: "acceptEdits",
+        sandbox: {
+          enabled: false, // Need to run git commands
+        },
+        abortController: abortController,
+      };
+
+      // Simple commit prompt
+      const prompt = `Please commit the current changes with this commit message:
+
+"${feature.category}: ${feature.description}"
+
+Steps:
+1. Run \`git add .\` to stage all changes
+2. Run \`git commit -m "message"\` with the provided message
+3. Report success
+
+Do NOT modify any code or run tests. Just commit the existing changes.`;
+
+      const currentQuery = query({ prompt, options });
+      execution.query = currentQuery;
+
+      let responseText = "";
+      for await (const msg of currentQuery) {
+        if (!execution.isActive()) break;
+
+        if (msg.type === "assistant" && msg.message?.content) {
+          for (const block of msg.message.content) {
+            if (block.type === "text") {
+              responseText += block.text;
+
+              await contextManager.writeToContextFile(projectPath, feature.id, block.text);
+
+              sendToRenderer({
+                type: "auto_mode_progress",
+                featureId: feature.id,
+                content: block.text,
+              });
+            } else if (block.type === "tool_use") {
+              const toolMsg = `\n🔧 Tool: ${block.name}\n`;
+              await contextManager.writeToContextFile(projectPath, feature.id, toolMsg);
+
+              sendToRenderer({
+                type: "auto_mode_tool",
+                featureId: feature.id,
+                tool: block.name,
+                input: block.input,
+              });
+            }
+          }
+        }
+      }
+
+      execution.query = null;
+      execution.abortController = null;
+
+      const finalMsg = "✓ Changes committed successfully\n";
+      await contextManager.writeToContextFile(projectPath, feature.id, finalMsg);
+
+      sendToRenderer({
+        type: "auto_mode_progress",
+        featureId: feature.id,
+        content: finalMsg,
+      });
+
+      return {
+        passes: true,
+        message: responseText.substring(0, 500),
+      };
+    } catch (error) {
+      if (error instanceof AbortError || error?.name === "AbortError") {
+        console.log("[FeatureExecutor] Commit aborted");
+        if (execution) {
+          execution.abortController = null;
+          execution.query = null;
+        }
+        return {
+          passes: false,
+          message: "Commit aborted",
+        };
+      }
+
+      console.error("[FeatureExecutor] Error committing feature:", error);
       if (execution) {
         execution.abortController = null;
         execution.query = null;
