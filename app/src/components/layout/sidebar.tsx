@@ -428,16 +428,16 @@ export function Sidebar() {
             onClick={() => setCurrentView("welcome")}
             data-testid="logo-button"
           >
-            <div className="relative flex items-center justify-center w-8 h-8 rounded-lg group">
+            <div className="relative flex items-center justify-center rounded-lg group">
               <img
-                src="/icon_gold.png"
+                src="/logo.png"
                 alt="Automaker Logo"
-                className="w-8 h-8 group-hover:rotate-12 transition-transform"
+                className="size-8 group-hover:rotate-12 transition-transform"
               />
             </div>
             <span
               className={cn(
-                "ml-3 font-bold text-sidebar-foreground text-base tracking-tight",
+                "ml-1 font-bold text-sidebar-foreground text-base tracking-tight",
                 sidebarOpen ? "hidden lg:block" : "hidden"
               )}
             >
