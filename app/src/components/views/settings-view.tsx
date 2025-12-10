@@ -2,11 +2,9 @@
 
 import { useState } from "react";
 import { useAppStore } from "@/store/app-store";
-import { useSetupStore } from "@/store/setup-store";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Settings, Keyboard, Trash2, Folder } from "lucide-react";
-import { getElectronAPI } from "@/lib/electron";
+import { Settings, Trash2, Folder } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -15,13 +13,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { KeyboardMap, ShortcutReferencePanel } from "@/components/ui/keyboard-map";
-// Import custom hooks
 import { useCliStatus } from "./settings-view/hooks/use-cli-status";
 import { useScrollTracking } from "./settings-view/hooks/use-scroll-tracking";
-// Import config
 import { NAV_ITEMS } from "./settings-view/config/navigation";
-// Import extracted sections
+import { KeyboardMapDialog } from "./settings-view/components/keyboard-map-dialog";
 import { ApiKeysSection } from "./settings-view/api-keys/api-keys-section";
 import { ClaudeCliStatus } from "./settings-view/cli-status/claude-cli-status";
 import { CodexCliStatus } from "./settings-view/cli-status/codex-cli-status";
@@ -48,9 +43,6 @@ export function SettingsView() {
     currentProject,
     moveProjectToTrash,
   } = useAppStore();
-
-  const { claudeAuthStatus, codexAuthStatus, setClaudeAuthStatus, setCodexAuthStatus } =
-    useSetupStore();
 
   // Compute the effective theme for the current project
   const effectiveTheme = currentProject?.theme || theme;
@@ -211,36 +203,10 @@ export function SettingsView() {
       </div>
 
       {/* Keyboard Map Dialog */}
-      <Dialog
+      <KeyboardMapDialog
         open={showKeyboardMapDialog}
         onOpenChange={setShowKeyboardMapDialog}
-      >
-        <DialogContent className="bg-popover border-border max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Keyboard className="w-5 h-5 text-brand-500" />
-              Keyboard Shortcut Map
-            </DialogTitle>
-            <DialogDescription className="text-muted-foreground">
-              Visual overview of all keyboard shortcuts. Keys in color are bound
-              to shortcuts. Click on any shortcut below to edit it.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex-1 overflow-y-auto space-y-6 py-4 pl-3 pr-6 pb-6">
-            {/* Visual Keyboard Map */}
-            <KeyboardMap />
-
-            {/* Shortcut Reference - Editable */}
-            <div className="border-t border-border pt-4">
-              <h3 className="text-sm font-semibold text-foreground mb-4">
-                All Shortcuts Reference (Click to Edit)
-              </h3>
-              <ShortcutReferencePanel editable />
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      />
 
       {/* Delete Project Confirmation Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
