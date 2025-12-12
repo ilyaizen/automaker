@@ -394,22 +394,25 @@ export function BoardView() {
   }, []);
 
   // Load features using features API
+  // IMPORTANT: Do NOT add 'features' to dependency array - it would cause infinite reload loop
   const loadFeatures = useCallback(async () => {
     if (!currentProject) return;
 
     const currentPath = currentProject.path;
     const previousPath = prevProjectPathRef.current;
+    const isProjectSwitch = previousPath !== null && currentPath !== previousPath;
 
-    // If project switched, clear features first to prevent cross-contamination
-    // Also treat this as an initial load for the new project
-    if (previousPath !== null && currentPath !== previousPath) {
+    // Get cached features from store (without adding to dependencies)
+    const cachedFeatures = useAppStore.getState().features;
+
+    // If project switched, mark it but don't clear features yet
+    // We'll clear after successful API load to prevent data loss
+    if (isProjectSwitch) {
       console.log(
-        `[BoardView] Project switch detected: ${previousPath} -> ${currentPath}, clearing features`
+        `[BoardView] Project switch detected: ${previousPath} -> ${currentPath}`
       );
       isSwitchingProjectRef.current = true;
       isInitialLoadRef.current = true;
-      setFeatures([]);
-      setPersistedCategories([]); // Also clear categories
     }
 
     // Update the ref to track current project
@@ -424,6 +427,7 @@ export function BoardView() {
       const api = getElectronAPI();
       if (!api.features) {
         console.error("[BoardView] Features API not available");
+        // Keep cached features if API is unavailable
         return;
       }
 
@@ -441,10 +445,31 @@ export function BoardView() {
             thinkingLevel: f.thinkingLevel || "none",
           })
         );
+        // Successfully loaded features - now safe to set them
         setFeatures(featuresWithIds);
+
+        // Only clear categories on project switch AFTER successful load
+        if (isProjectSwitch) {
+          setPersistedCategories([]);
+        }
+      } else if (!result.success && result.error) {
+        console.error("[BoardView] API returned error:", result.error);
+        // If it's a new project or the error indicates no features found,
+        // that's expected - start with empty array
+        if (isProjectSwitch) {
+          setFeatures([]);
+          setPersistedCategories([]);
+        }
+        // Otherwise keep cached features
       }
     } catch (error) {
       console.error("Failed to load features:", error);
+      // On error, keep existing cached features for the current project
+      // Only clear on project switch if we have no features from server
+      if (isProjectSwitch && cachedFeatures.length === 0) {
+        setFeatures([]);
+        setPersistedCategories([]);
+      }
     } finally {
       setIsLoading(false);
       isInitialLoadRef.current = false;
@@ -1475,8 +1500,14 @@ export function BoardView() {
       if (isRunning) {
         map.in_progress.push(f);
       } else {
-        // Otherwise, use the feature's status
-        map[f.status].push(f);
+        // Otherwise, use the feature's status (fallback to backlog for unknown statuses)
+        const status = f.status as ColumnId;
+        if (map[status]) {
+          map[status].push(f);
+        } else {
+          // Unknown status, default to backlog
+          map.backlog.push(f);
+        }
       }
     });
 

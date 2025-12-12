@@ -68,19 +68,24 @@ export function useCliStatus() {
         try {
           const result = await api.setup.getClaudeStatus();
           if (result.success && result.auth) {
-            const auth = result.auth;
-            // Validate method is one of the expected values, default to "none"
-            const validMethods = ["oauth_token_env", "oauth_token", "api_key", "api_key_env", "none"] as const;
+            // Cast to extended type that includes server-added fields
+            const auth = result.auth as typeof result.auth & {
+              oauthTokenValid?: boolean;
+              apiKeyValid?: boolean;
+            };
+            // Map server method names to client method types
+            // Server returns: oauth_token_env, oauth_token, api_key_env, api_key, credentials_file, none
+            const validMethods = ["oauth_token_env", "oauth_token", "api_key", "api_key_env", "credentials_file", "none"] as const;
             type AuthMethod = typeof validMethods[number];
             const method: AuthMethod = validMethods.includes(auth.method as AuthMethod)
               ? (auth.method as AuthMethod)
-              : "none";
+              : auth.authenticated ? "api_key" : "none"; // Default authenticated to api_key, not none
             const authStatus = {
               authenticated: auth.authenticated,
               method,
               hasCredentialsFile: auth.hasCredentialsFile ?? false,
-              oauthTokenValid: auth.hasStoredOAuthToken || auth.hasEnvOAuthToken,
-              apiKeyValid: auth.hasStoredApiKey || auth.hasEnvApiKey,
+              oauthTokenValid: auth.oauthTokenValid || auth.hasStoredOAuthToken || auth.hasEnvOAuthToken,
+              apiKeyValid: auth.apiKeyValid || auth.hasStoredApiKey || auth.hasEnvApiKey,
               hasEnvOAuthToken: auth.hasEnvOAuthToken,
               hasEnvApiKey: auth.hasEnvApiKey,
             };
@@ -96,27 +101,30 @@ export function useCliStatus() {
         try {
           const result = await api.setup.getCodexStatus();
           if (result.success && result.auth) {
-            const auth = result.auth;
-            // Determine method - prioritize cli_verified and cli_tokens over auth_file
-            const method =
-              auth.method === "cli_verified" || auth.method === "cli_tokens"
-                ? auth.method === "cli_verified"
-                  ? ("cli_verified" as const)
-                  : ("cli_tokens" as const)
-                : auth.method === "auth_file"
-                ? ("api_key" as const)
-                : auth.method === "env_var"
-                ? ("env" as const)
-                : ("none" as const);
+            // Cast to extended type that includes server-added fields
+            const auth = result.auth as typeof result.auth & {
+              hasSubscription?: boolean;
+              cliLoggedIn?: boolean;
+              hasEnvApiKey?: boolean;
+            };
+            // Map server method names to client method types
+            // Server returns: subscription, cli_verified, cli_tokens, api_key, env, none
+            const validMethods = ["subscription", "cli_verified", "cli_tokens", "api_key", "env", "none"] as const;
+            type CodexMethod = typeof validMethods[number];
+            const method: CodexMethod = validMethods.includes(auth.method as CodexMethod)
+              ? (auth.method as CodexMethod)
+              : auth.authenticated ? "api_key" : "none"; // Default authenticated to api_key
 
             const authStatus = {
               authenticated: auth.authenticated,
               method,
-              // Only set apiKeyValid for actual API key methods, not CLI login
+              // Only set apiKeyValid for actual API key methods, not CLI login or subscription
               apiKeyValid:
-                method === "cli_verified" || method === "cli_tokens"
+                method === "cli_verified" || method === "cli_tokens" || method === "subscription"
                   ? undefined
-                  : auth.hasAuthFile || auth.hasEnvKey,
+                  : auth.hasAuthFile || auth.hasEnvKey || auth.hasEnvApiKey,
+              hasSubscription: auth.hasSubscription,
+              cliLoggedIn: auth.cliLoggedIn,
             };
             setCodexAuthStatus(authStatus);
           }

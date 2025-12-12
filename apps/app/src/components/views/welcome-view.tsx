@@ -21,7 +21,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAppStore } from "@/store/app-store";
-import { getElectronAPI } from "@/lib/electron";
+import { getElectronAPI, type Project } from "@/lib/electron";
 import { initializeProject } from "@/lib/project-init";
 import {
   FolderOpen,
@@ -105,14 +105,34 @@ export function WelcomeView() {
           return;
         }
 
-        const project = {
-          id: `project-${Date.now()}`,
-          name,
-          path,
-          lastOpened: new Date().toISOString(),
-        };
+        // Check if project already exists (by path) to preserve theme and other settings
+        const existingProject = projects.find((p) => p.path === path);
 
-        addProject(project);
+        let project: Project;
+        if (existingProject) {
+          // Update existing project, preserving theme and other properties
+          project = {
+            ...existingProject,
+            name, // Update name in case it changed
+            lastOpened: new Date().toISOString(),
+          };
+          // Update the project in the store (this will update the existing entry)
+          const updatedProjects = projects.map((p) =>
+            p.id === existingProject.id ? project : p
+          );
+          // We need to manually update projects since addProject would create a duplicate
+          useAppStore.setState({ projects: updatedProjects });
+        } else {
+          // Create new project
+          project = {
+            id: `project-${Date.now()}`,
+            name,
+            path,
+            lastOpened: new Date().toISOString(),
+          };
+          addProject(project);
+        }
+
         setCurrentProject(project);
 
         // Show initialization dialog if files were created
@@ -148,7 +168,7 @@ export function WelcomeView() {
         setIsOpening(false);
       }
     },
-    [addProject, setCurrentProject, analyzeProject]
+    [projects, addProject, setCurrentProject, analyzeProject]
   );
 
   const handleOpenProject = useCallback(async () => {

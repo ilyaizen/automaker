@@ -413,14 +413,33 @@ export function Sidebar() {
           return;
         }
 
-        const project = {
-          id: `project-${Date.now()}`,
-          name,
-          path,
-          lastOpened: new Date().toISOString(),
-        };
+        // Check if project already exists (by path) to preserve theme and other settings
+        const existingProject = projects.find((p) => p.path === path);
 
-        addProject(project);
+        let project: Project;
+        if (existingProject) {
+          // Update existing project, preserving theme and other properties
+          project = {
+            ...existingProject,
+            name, // Update name in case it changed
+            lastOpened: new Date().toISOString(),
+          };
+          // Update the project in the store (this will update the existing entry)
+          const updatedProjects = projects.map((p) =>
+            p.id === existingProject.id ? project : p
+          );
+          useAppStore.setState({ projects: updatedProjects });
+        } else {
+          // Create new project
+          project = {
+            id: `project-${Date.now()}`,
+            name,
+            path,
+            lastOpened: new Date().toISOString(),
+          };
+          addProject(project);
+        }
+
         setCurrentProject(project);
 
         // Check if app_spec.txt exists
@@ -455,7 +474,7 @@ export function Sidebar() {
         });
       }
     }
-  }, [addProject, setCurrentProject]);
+  }, [projects, addProject, setCurrentProject]);
 
   const handleRestoreProject = useCallback(
     (projectId: string) => {

@@ -10,10 +10,19 @@ export interface CliStatus {
   error?: string;
 }
 
+// Claude Auth Method - all possible authentication sources
+export type ClaudeAuthMethod =
+  | "oauth_token_env"    // CLAUDE_CODE_OAUTH_TOKEN environment variable
+  | "oauth_token"        // Stored OAuth token from claude login
+  | "api_key_env"        // ANTHROPIC_API_KEY environment variable
+  | "api_key"            // Manually stored API key
+  | "credentials_file"   // Generic credentials file detection
+  | "none";
+
 // Claude Auth Status
 export interface ClaudeAuthStatus {
   authenticated: boolean;
-  method: "oauth_token_env" | "oauth_token" | "api_key" | "api_key_env" | "none";
+  method: ClaudeAuthMethod;
   hasCredentialsFile?: boolean;
   oauthTokenValid?: boolean;
   apiKeyValid?: boolean;
@@ -22,12 +31,23 @@ export interface ClaudeAuthStatus {
   error?: string;
 }
 
+// Codex Auth Method - all possible authentication sources
+export type CodexAuthMethod =
+  | "subscription"       // Codex/OpenAI Plus or Team subscription
+  | "cli_verified"       // CLI logged in with OpenAI account
+  | "cli_tokens"         // CLI with stored access tokens
+  | "api_key"            // Manually stored API key
+  | "env"                // OPENAI_API_KEY environment variable
+  | "none";
+
 // Codex Auth Status
 export interface CodexAuthStatus {
   authenticated: boolean;
-  method: "api_key" | "env" | "cli_verified" | "cli_tokens" | "none";
+  method: CodexAuthMethod;
   apiKeyValid?: boolean;
   mcpConfigured?: boolean;
+  hasSubscription?: boolean;
+  cliLoggedIn?: boolean;
   error?: string;
 }
 

@@ -94,7 +94,7 @@ export default function Home() {
       try {
         const api = getElectronAPI();
         const result = await api.ping();
-        setIpcConnected(result === "pong" || result === "pong (mock)");
+        setIpcConnected(result === "pong");
       } catch (error) {
         console.error("IPC connection failed:", error);
         setIpcConnected(false);
@@ -193,8 +193,8 @@ export default function Home() {
         <SetupView />
         {/* Environment indicator */}
         {isMounted && !isElectron() && (
-          <div className="fixed bottom-4 right-4 px-3 py-1.5 bg-yellow-500/10 text-yellow-500 text-xs rounded-full border border-yellow-500/20 pointer-events-none">
-            Web Mode (Mock IPC)
+          <div className="fixed bottom-4 right-4 px-3 py-1.5 bg-blue-500/10 text-blue-500 text-xs rounded-full border border-blue-500/20 pointer-events-none">
+            Web Mode
           </div>
         )}
       </main>
@@ -210,8 +210,8 @@ export default function Home() {
 
       {/* Environment indicator - only show after mount to prevent hydration issues */}
       {isMounted && !isElectron() && (
-        <div className="fixed bottom-4 right-4 px-3 py-1.5 bg-yellow-500/10 text-yellow-500 text-xs rounded-full border border-yellow-500/20 pointer-events-none">
-          Web Mode (Mock IPC)
+        <div className="fixed bottom-4 right-4 px-3 py-1.5 bg-blue-500/10 text-blue-500 text-xs rounded-full border border-blue-500/20 pointer-events-none">
+          Web Mode
         </div>
       )}
 

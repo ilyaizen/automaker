@@ -61,12 +61,14 @@ export function AuthenticationStatusDisplay({
                     {claudeAuthStatus.method === "oauth_token_env"
                       ? "Using CLAUDE_CODE_OAUTH_TOKEN"
                       : claudeAuthStatus.method === "oauth_token"
-                      ? "Using stored OAuth token"
+                      ? "Using stored OAuth token (claude login)"
                       : claudeAuthStatus.method === "api_key_env"
                       ? "Using ANTHROPIC_API_KEY"
                       : claudeAuthStatus.method === "api_key"
                       ? "Using stored API key"
-                      : "Unknown method"}
+                      : claudeAuthStatus.method === "credentials_file"
+                      ? "Using credentials file"
+                      : `Using ${claudeAuthStatus.method || "detected"} authentication`}
                   </span>
                 </div>
               </>
@@ -107,14 +109,16 @@ export function AuthenticationStatusDisplay({
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Info className="w-3 h-3 shrink-0" />
                   <span>
-                    {codexAuthStatus.method === "cli_verified" ||
-                    codexAuthStatus.method === "cli_tokens"
+                    {codexAuthStatus.method === "subscription"
+                      ? "Using Codex subscription (Plus/Team)"
+                      : codexAuthStatus.method === "cli_verified" ||
+                        codexAuthStatus.method === "cli_tokens"
                       ? "Using CLI login (OpenAI account)"
                       : codexAuthStatus.method === "api_key"
                       ? "Using stored API key"
                       : codexAuthStatus.method === "env"
                       ? "Using OPENAI_API_KEY"
-                      : "Unknown method"}
+                      : `Using ${codexAuthStatus.method || "unknown"} authentication`}
                   </span>
                 </div>
               </>

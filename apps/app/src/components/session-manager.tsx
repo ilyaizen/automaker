@@ -4,14 +4,13 @@ import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { HotkeyButton } from "@/components/ui/hotkey-button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus,
   MessageSquare,
@@ -26,7 +25,6 @@ import {
 import { cn } from "@/lib/utils";
 import type { SessionListItem } from "@/types/electron";
 import { useKeyboardShortcutsConfig } from "@/hooks/use-keyboard-shortcuts";
-import { useAppStore } from "@/store/app-store";
 
 // Random session name generator
 const adjectives = [

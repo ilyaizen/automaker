@@ -149,12 +149,12 @@ export function AgentToolsView() {
     setTerminalResult(null);
 
     try {
-      // Simulate agent requesting terminal command execution
-      console.log(`[Agent Tool] Requesting to run command: ${terminalCommand}`);
+      // Terminal command simulation for demonstration purposes
+      console.log(`[Agent Tool] Simulating command: ${terminalCommand}`);
 
-      // In mock mode, simulate terminal output
-      // In real Electron mode, this would use child_process
-      const mockOutputs: Record<string, string> = {
+      // Simulated outputs for common commands (preview mode)
+      // In production, the agent executes commands via Claude SDK
+      const simulatedOutputs: Record<string, string> = {
         ls: "app_spec.txt\nfeatures\nnode_modules\npackage.json\nsrc\ntests\ntsconfig.json",
         pwd: currentProject?.path || "/Users/demo/project",
         "echo hello": "hello",
@@ -168,8 +168,8 @@ export function AgentToolsView() {
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       const output =
-        mockOutputs[terminalCommand.toLowerCase()] ||
-        `Command executed: ${terminalCommand}\n(Mock output - real execution requires Electron mode)`;
+        simulatedOutputs[terminalCommand.toLowerCase()] ||
+        `[Preview] ${terminalCommand}\n(Terminal commands are executed by the agent during feature implementation)`;
 
       setTerminalResult({
         success: true,

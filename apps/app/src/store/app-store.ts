@@ -1138,26 +1138,32 @@ export const useAppStore = create<AppState & AppActions>()(
     {
       name: "automaker-storage",
       partialize: (state) => ({
+        // Project management
         projects: state.projects,
         currentProject: state.currentProject,
         trashedProjects: state.trashedProjects,
         projectHistory: state.projectHistory,
         projectHistoryIndex: state.projectHistoryIndex,
+        // Features - cached locally for faster hydration (authoritative source is server)
+        features: state.features,
+        // UI state
         currentView: state.currentView,
         theme: state.theme,
         sidebarOpen: state.sidebarOpen,
-        apiKeys: state.apiKeys,
-        chatSessions: state.chatSessions,
         chatHistoryOpen: state.chatHistoryOpen,
+        kanbanCardDetailLevel: state.kanbanCardDetailLevel,
+        // Settings
+        apiKeys: state.apiKeys,
         maxConcurrency: state.maxConcurrency,
         autoModeByProject: state.autoModeByProject,
-        kanbanCardDetailLevel: state.kanbanCardDetailLevel,
         defaultSkipTests: state.defaultSkipTests,
         useWorktrees: state.useWorktrees,
         showProfilesOnly: state.showProfilesOnly,
         keyboardShortcuts: state.keyboardShortcuts,
         muteDoneSound: state.muteDoneSound,
+        // Profiles and sessions
         aiProfiles: state.aiProfiles,
+        chatSessions: state.chatSessions,
         lastSelectedSessionByProject: state.lastSelectedSessionByProject,
       }),
     }

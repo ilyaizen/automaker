@@ -1,0 +1,40 @@
+# Automaker Docker Compose
+# For self-hosting the Automaker backend server
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    container_name: automaker-server
+    restart: unless-stopped
+    ports:
+      - "3008:3008"
+    environment:
+      # Required
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+
+      # Optional - authentication (leave empty to disable)
+      - AUTOMAKER_API_KEY=${AUTOMAKER_API_KEY:-}
+
+      # Optional - restrict to specific directories (comma-separated)
+      - ALLOWED_PROJECT_DIRS=${ALLOWED_PROJECT_DIRS:-/projects}
+
+      # Optional - data directory for sessions, etc.
+      - DATA_DIR=/data
+
+      # Optional - CORS origin (default allows all)
+      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+
+      # Optional - additional API keys
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+    volumes:
+      # Persist data between restarts
+      - automaker-data:/data
+
+      # Mount your projects directory (read-write access)
+      - ${PROJECTS_DIR:-./projects}:/projects
+
+volumes:
+  automaker-data:

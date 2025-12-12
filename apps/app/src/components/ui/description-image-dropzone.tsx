@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { ImageIcon, X, Loader2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
@@ -98,7 +98,7 @@ export function DescriptionImageDropZone({
     });
   };
 
-  const saveImageToTemp = async (
+  const saveImageToTemp = useCallback(async (
     base64Data: string,
     filename: string,
     mimeType: string
@@ -107,8 +107,8 @@ export function DescriptionImageDropZone({
       const api = getElectronAPI();
       // Check if saveImageToTemp method exists
       if (!api.saveImageToTemp) {
-        // Fallback for mock API - return a mock path in .automaker/images
-        console.log("[DescriptionImageDropZone] Using mock path for image");
+        // Fallback path when saveImageToTemp is not available
+        console.log("[DescriptionImageDropZone] Using fallback path for image");
         return `.automaker/images/${Date.now()}_${filename}`;
       }
 
@@ -124,7 +124,7 @@ export function DescriptionImageDropZone({
       console.error("[DescriptionImageDropZone] Error saving image:", error);
       return null;
     }
-  };
+  }, [currentProject?.path]);
 
   const processFiles = useCallback(
     async (files: FileList) => {
@@ -193,7 +193,7 @@ export function DescriptionImageDropZone({
 
       setIsProcessing(false);
     },
-    [disabled, isProcessing, images, maxFiles, maxFileSize, onImagesChange, previewImages]
+    [disabled, isProcessing, images, maxFiles, maxFileSize, onImagesChange, previewImages, saveImageToTemp]
   );
 
   const handleDrop = useCallback(

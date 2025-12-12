@@ -443,13 +443,109 @@ export const isElectron = (): boolean => {
   return typeof window !== "undefined" && window.isElectron === true;
 };
 
-// Get the Electron API or a mock for web development
+// Check if backend server is available
+let serverAvailable: boolean | null = null;
+let serverCheckPromise: Promise<boolean> | null = null;
+
+export const checkServerAvailable = async (): Promise<boolean> => {
+  if (serverAvailable !== null) return serverAvailable;
+  if (serverCheckPromise) return serverCheckPromise;
+
+  serverCheckPromise = (async () => {
+    try {
+      const serverUrl =
+        process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3008";
+      const response = await fetch(`${serverUrl}/api/health`, {
+        method: "GET",
+        signal: AbortSignal.timeout(2000),
+      });
+      serverAvailable = response.ok;
+    } catch {
+      serverAvailable = false;
+    }
+    return serverAvailable;
+  })();
+
+  return serverCheckPromise;
+};
+
+// Reset server check (useful for retrying connection)
+export const resetServerCheck = (): void => {
+  serverAvailable = null;
+  serverCheckPromise = null;
+};
+
+// Cached HTTP client instance
+let httpClientInstance: ElectronAPI | null = null;
+
+// Check if we're in simplified Electron mode (HTTP backend instead of IPC)
+const isSimplifiedElectronMode = (): boolean => {
+  if (typeof window === "undefined") return false;
+  const api = window.electronAPI as any;
+  // Simplified mode has isElectron flag and getServerUrl but NOT readFile
+  return api?.isElectron === true &&
+         typeof api?.getServerUrl === "function" &&
+         typeof api?.readFile !== "function";
+};
+
+// Get the Electron API or HTTP client for web mode
+// In simplified Electron mode and web mode, uses HTTP client
 export const getElectronAPI = (): ElectronAPI => {
+  // Check if we're in simplified Electron mode (uses HTTP backend)
+  if (isSimplifiedElectronMode()) {
+    if (typeof window !== "undefined" && !httpClientInstance) {
+      const { getHttpApiClient } = require("./http-api-client");
+      httpClientInstance = getHttpApiClient();
+    }
+    return httpClientInstance!;
+  }
+
+  // Full Electron API with IPC
   if (isElectron() && window.electronAPI) {
     return window.electronAPI;
   }
 
-  // Return mock API for web development
+  // Web mode: use HTTP API client
+  if (typeof window !== "undefined") {
+    if (!httpClientInstance) {
+      const { getHttpApiClient } = require("./http-api-client");
+      httpClientInstance = getHttpApiClient();
+    }
+    return httpClientInstance!;
+  }
+
+  // SSR fallback - this shouldn't be called during actual operation
+  throw new Error("Cannot get Electron API during SSR");
+};
+
+// Async version that checks server availability first
+export const getElectronAPIAsync = async (): Promise<ElectronAPI> => {
+  // Simplified Electron mode or web mode: use HTTP client
+  if (isSimplifiedElectronMode() || !isElectron()) {
+    if (typeof window !== "undefined") {
+      const { getHttpApiClient } = await import("./http-api-client");
+      return getHttpApiClient();
+    }
+  }
+
+  // Full Electron API with IPC
+  if (isElectron() && window.electronAPI) {
+    return window.electronAPI;
+  }
+
+  throw new Error("Cannot get Electron API during SSR");
+};
+
+// Check if backend is connected (for showing connection status in UI)
+export const isBackendConnected = async (): Promise<boolean> => {
+  // Full Electron mode: backend is built-in
+  if (isElectron() && !isSimplifiedElectronMode()) return true;
+  // Simplified Electron or web mode: check server availability
+  return await checkServerAvailable();
+};
+
+// Mock API for development/fallback when no backend is available
+const getMockElectronAPI = (): ElectronAPI => {
   return {
     ping: async () => "pong (mock)",
 
