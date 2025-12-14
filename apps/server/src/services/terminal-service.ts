@@ -26,6 +26,8 @@ export interface TerminalSession {
   scrollbackBuffer: string; // Store recent output for replay on reconnect
   outputBuffer: string; // Pending output to be flushed
   flushTimeout: NodeJS.Timeout | null; // Throttle timer
+  resizeInProgress: boolean; // Flag to suppress scrollback during resize
+  resizeDebounceTimeout: NodeJS.Timeout | null; // Resize settle timer
 }
 
 export interface TerminalOptions {
@@ -213,6 +215,8 @@ export class TerminalService extends EventEmitter {
       scrollbackBuffer: "",
       outputBuffer: "",
       flushTimeout: null,
+      resizeInProgress: false,
+      resizeDebounceTimeout: null,
     };
 
     this.sessions.set(id, session);
@@ -239,6 +243,13 @@ export class TerminalService extends EventEmitter {
 
     // Forward data events with throttling
     ptyProcess.onData((data) => {
+      // Skip ALL output during resize/reconnect to prevent prompt redraw duplication
+      // This drops both scrollback AND live output during the suppression window
+      // Without this, prompt redraws from SIGWINCH go to live clients causing duplicates
+      if (session.resizeInProgress) {
+        return;
+      }
+
       // Append to scrollback buffer
       session.scrollbackBuffer += data;
       // Trim if too large (keep the most recent data)
@@ -246,7 +257,7 @@ export class TerminalService extends EventEmitter {
         session.scrollbackBuffer = session.scrollbackBuffer.slice(-MAX_SCROLLBACK_SIZE);
       }
 
-      // Buffer output for throttled delivery
+      // Buffer output for throttled live delivery
       session.outputBuffer += data;
 
       // Schedule flush if not already scheduled
@@ -282,18 +293,40 @@ export class TerminalService extends EventEmitter {
 
   /**
    * Resize a terminal session
+   * @param suppressOutput - If true, suppress output during resize to prevent duplicate prompts.
+   *                         Should be false for the initial resize so the first prompt isn't dropped.
    */
-  resize(sessionId: string, cols: number, rows: number): boolean {
+  resize(sessionId: string, cols: number, rows: number, suppressOutput: boolean = true): boolean {
     const session = this.sessions.get(sessionId);
     if (!session) {
       console.warn(`[Terminal] Session ${sessionId} not found for resize`);
       return false;
     }
     try {
+      // Only suppress output on subsequent resizes, not the initial one
+      // This prevents the shell's first prompt from being dropped
+      if (suppressOutput) {
+        session.resizeInProgress = true;
+        if (session.resizeDebounceTimeout) {
+          clearTimeout(session.resizeDebounceTimeout);
+        }
+      }
+
       session.pty.resize(cols, rows);
+
+      // Clear resize flag after a delay (allow prompt to settle)
+      // 150ms is enough for most prompts - longer causes sluggish feel
+      if (suppressOutput) {
+        session.resizeDebounceTimeout = setTimeout(() => {
+          session.resizeInProgress = false;
+          session.resizeDebounceTimeout = null;
+        }, 150);
+      }
+
       return true;
     } catch (error) {
       console.error(`[Terminal] Error resizing session ${sessionId}:`, error);
+      session.resizeInProgress = false; // Clear flag on error
       return false;
     }
   }
@@ -311,6 +344,11 @@ export class TerminalService extends EventEmitter {
       if (session.flushTimeout) {
         clearTimeout(session.flushTimeout);
         session.flushTimeout = null;
+      }
+      // Clean up resize debounce timeout
+      if (session.resizeDebounceTimeout) {
+        clearTimeout(session.resizeDebounceTimeout);
+        session.resizeDebounceTimeout = null;
       }
       session.pty.kill();
       this.sessions.delete(sessionId);
@@ -335,6 +373,30 @@ export class TerminalService extends EventEmitter {
   getScrollback(sessionId: string): string | null {
     const session = this.sessions.get(sessionId);
     return session?.scrollbackBuffer || null;
+  }
+
+  /**
+   * Get scrollback buffer and clear pending output buffer to prevent duplicates
+   * Call this when establishing a new WebSocket connection
+   * This prevents data that's already in scrollback from being sent again via data callback
+   */
+  getScrollbackAndClearPending(sessionId: string): string | null {
+    const session = this.sessions.get(sessionId);
+    if (!session) return null;
+
+    // Clear any pending output that hasn't been flushed yet
+    // This data is already in scrollbackBuffer
+    session.outputBuffer = "";
+    if (session.flushTimeout) {
+      clearTimeout(session.flushTimeout);
+      session.flushTimeout = null;
+    }
+
+    // NOTE: Don't set resizeInProgress here - it causes blank terminals
+    // if the shell hasn't output its prompt yet when WebSocket connects.
+    // The resize() method handles suppression during actual resize events.
+
+    return session.scrollbackBuffer || null;
   }
 
   /**

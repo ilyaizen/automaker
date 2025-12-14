@@ -199,6 +199,16 @@ wss.on("connection", (ws: WebSocket) => {
 const terminalConnections: Map<string, Set<WebSocket>> = new Map();
 // Track last resize dimensions per session to deduplicate resize messages
 const lastResizeDimensions: Map<string, { cols: number; rows: number }> = new Map();
+// Track last resize timestamp to rate-limit resize operations (prevents resize storm)
+const lastResizeTime: Map<string, number> = new Map();
+const RESIZE_MIN_INTERVAL_MS = 100; // Minimum 100ms between resize operations
+
+// Clean up resize tracking when sessions actually exit (not just when connections close)
+terminalService.onExit((sessionId) => {
+  lastResizeDimensions.delete(sessionId);
+  lastResizeTime.delete(sessionId);
+  terminalConnections.delete(sessionId);
+});
 
 // Terminal WebSocket connection handler
 terminalWss.on(
@@ -261,8 +271,8 @@ terminalWss.on(
     );
 
     // Send scrollback buffer BEFORE subscribing to prevent race condition
-    // This ensures data isn't sent twice (once in scrollback, once via subscription)
-    const scrollback = terminalService.getScrollback(sessionId);
+    // Also clear pending output buffer to prevent duplicates from throttled flush
+    const scrollback = terminalService.getScrollbackAndClearPending(sessionId);
     if (scrollback && scrollback.length > 0) {
       ws.send(
         JSON.stringify({
@@ -299,21 +309,32 @@ terminalWss.on(
             break;
 
           case "resize":
-            // Resize terminal with deduplication
+            // Resize terminal with deduplication and rate limiting
             if (msg.cols && msg.rows) {
-              // Check if dimensions are different from last resize
+              const now = Date.now();
+              const lastTime = lastResizeTime.get(sessionId) || 0;
               const lastDimensions = lastResizeDimensions.get(sessionId);
+
+              // Skip if resized too recently (prevents resize storm during splits)
+              if (now - lastTime < RESIZE_MIN_INTERVAL_MS) {
+                break;
+              }
+
+              // Check if dimensions are different from last resize
               if (
                 !lastDimensions ||
                 lastDimensions.cols !== msg.cols ||
                 lastDimensions.rows !== msg.rows
               ) {
-                // Only resize if dimensions changed
-                terminalService.resize(sessionId, msg.cols, msg.rows);
+                // Only suppress output on subsequent resizes, not the first one
+                // The first resize happens on terminal open and we don't want to drop the initial prompt
+                const isFirstResize = !lastDimensions;
+                terminalService.resize(sessionId, msg.cols, msg.rows, !isFirstResize);
                 lastResizeDimensions.set(sessionId, {
                   cols: msg.cols,
                   rows: msg.rows,
                 });
+                lastResizeTime.set(sessionId, now);
               }
             }
             break;
@@ -344,8 +365,10 @@ terminalWss.on(
         connections.delete(ws);
         if (connections.size === 0) {
           terminalConnections.delete(sessionId);
-          // Clean up resize dimensions tracking when session has no more connections
-          lastResizeDimensions.delete(sessionId);
+          // DON'T delete lastResizeDimensions/lastResizeTime here!
+          // The session still exists, and reconnecting clients need to know
+          // this isn't the "first resize" to prevent duplicate prompts.
+          // These get cleaned up when the session actually exits.
         }
       }
     });
