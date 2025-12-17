@@ -11,6 +11,7 @@ import { getElectronAPI } from "@/lib/electron";
 import { toast } from "sonner";
 import { useAutoMode } from "@/hooks/use-auto-mode";
 import { truncateDescription } from "@/lib/utils";
+import { getBlockingDependencies } from "@/lib/dependency-resolver";
 
 interface UseBoardActionsProps {
   currentProject: { path: string; id: string } | null;
@@ -74,6 +75,7 @@ export function useBoardActions({
     removeFeature,
     moveFeature,
     useWorktrees,
+    enableDependencyBlocking,
   } = useAppStore();
   const autoMode = useAutoMode();
 
@@ -344,6 +346,21 @@ export function useBoardActions({
         return false;
       }
 
+      // Check for blocking dependencies and show warning if enabled
+      if (enableDependencyBlocking) {
+        const blockingDeps = getBlockingDependencies(feature, features);
+        if (blockingDeps.length > 0) {
+          const depDescriptions = blockingDeps.map(depId => {
+            const dep = features.find(f => f.id === depId);
+            return dep ? truncateDescription(dep.description, 40) : depId;
+          }).join(", ");
+
+          toast.warning("Starting feature with incomplete dependencies", {
+            description: `This feature depends on: ${depDescriptions}`,
+          });
+        }
+      }
+
       const updates = {
         status: "in_progress" as const,
         startedAt: new Date().toISOString(),
@@ -355,7 +372,7 @@ export function useBoardActions({
       await handleRunFeature(feature);
       return true;
     },
-    [autoMode, updateFeature, persistFeatureUpdate, handleRunFeature]
+    [autoMode, enableDependencyBlocking, features, updateFeature, persistFeatureUpdate, handleRunFeature]
   );
 
   const handleVerifyFeature = useCallback(

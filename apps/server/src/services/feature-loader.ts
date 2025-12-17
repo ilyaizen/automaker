@@ -19,6 +19,10 @@ export interface Feature {
   steps?: string[];
   passes?: boolean;
   priority?: number;
+  status?: string;
+  dependencies?: string[];
+  spec?: string;
+  model?: string;
   imagePaths?: Array<string | { path: string; [key: string]: unknown }>;
   [key: string]: unknown;
 }
