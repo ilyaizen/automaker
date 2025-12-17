@@ -115,7 +115,7 @@ export function CreatePRDialog({
           if (!result.result.prCreated && hasBrowserUrl) {
             // If gh CLI is not available, show browser fallback UI
             if (prError === "gh_cli_not_available" || !result.result.ghCliAvailable) {
-              setBrowserUrl(result.result.browserUrl);
+              setBrowserUrl(result.result.browserUrl ?? null);
               setShowBrowserFallback(true);
               toast.success("Branch pushed", {
                 description: result.result.committed
@@ -140,7 +140,7 @@ export function CreatePRDialog({
               }
 
               // Show error but also provide browser option
-              setBrowserUrl(result.result.browserUrl);
+              setBrowserUrl(result.result.browserUrl ?? null);
               setShowBrowserFallback(true);
               toast.error("PR creation failed", {
                 description: errorMessage,

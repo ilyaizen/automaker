@@ -32,7 +32,7 @@ export default defineConfig({
           {
             command: `cd ../server && npm run dev`,
             url: `http://localhost:${serverPort}/api/health`,
-            reuseExistingServer: !process.env.CI,
+            reuseExistingServer: true,
             timeout: 60000,
             env: {
               ...process.env,
@@ -47,7 +47,7 @@ export default defineConfig({
           {
             command: `npx next dev -p ${port}`,
             url: `http://localhost:${port}`,
-            reuseExistingServer: !process.env.CI,
+            reuseExistingServer: true,
             timeout: 120000,
             env: {
               ...process.env,
