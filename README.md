@@ -79,7 +79,7 @@ The future of software development is **agentic coding**—where developers beco
 >
 > **We do not recommend running Automaker directly on your local computer** due to the risk of AI agents having access to your entire file system. Please sandbox this application using Docker or a virtual machine.
 >
-> **[Read the full disclaimer](../DISCLAIMER.md)**
+> **[Read the full disclaimer](./DISCLAIMER.md)**
 
 ---
 
