@@ -3,66 +3,15 @@
  */
 
 import type { Request, Response } from "express";
-import { exec } from "child_process";
-import { promisify } from "util";
-import { getErrorMessage, logError } from "../common.js";
+import {
+  getErrorMessage,
+  logError,
+  execAsync,
+  execEnv,
+  isValidBranchName,
+  isGhCliAvailable,
+} from "../common.js";
 import { updateWorktreePRInfo } from "../../../lib/worktree-metadata.js";
-
-// Shell escaping utility to prevent command injection
-function shellEscape(arg: string): string {
-  if (process.platform === "win32") {
-    // Windows CMD shell escaping
-    return `"${arg.replace(/"/g, '""')}"`;
-  } else {
-    // Unix shell escaping
-    return `'${arg.replace(/'/g, "'\\''")}'`;
-  }
-}
-
-// Validate branch name to prevent command injection
-function isValidBranchName(name: string): boolean {
-  // Git branch names cannot contain: space, ~, ^, :, ?, *, [, \, or control chars
-  // Also reject shell metacharacters for safety
-  return /^[a-zA-Z0-9._\-/]+$/.test(name) && name.length < 250;
-}
-
-const execAsync = promisify(exec);
-
-// Extended PATH to include common tool installation locations
-// This is needed because Electron apps don't inherit the user's shell PATH
-const pathSeparator = process.platform === "win32" ? ";" : ":";
-const additionalPaths: string[] = [];
-
-if (process.platform === "win32") {
-  // Windows paths
-  if (process.env.LOCALAPPDATA) {
-    additionalPaths.push(`${process.env.LOCALAPPDATA}\\Programs\\Git\\cmd`);
-  }
-  if (process.env.PROGRAMFILES) {
-    additionalPaths.push(`${process.env.PROGRAMFILES}\\Git\\cmd`);
-  }
-  if (process.env["ProgramFiles(x86)"]) {
-    additionalPaths.push(`${process.env["ProgramFiles(x86)"]}\\Git\\cmd`);
-  }
-} else {
-  // Unix/Mac paths
-  additionalPaths.push(
-    "/opt/homebrew/bin",        // Homebrew on Apple Silicon
-    "/usr/local/bin",           // Homebrew on Intel Mac, common Linux location
-    "/home/linuxbrew/.linuxbrew/bin", // Linuxbrew
-    `${process.env.HOME}/.local/bin`, // pipx, other user installs
-  );
-}
-
-const extendedPath = [
-  process.env.PATH,
-  ...additionalPaths.filter(Boolean),
-].filter(Boolean).join(pathSeparator);
-
-const execEnv = {
-  ...process.env,
-  PATH: extendedPath,
-};
 
 export function createCreatePRHandler() {
   return async (req: Request, res: Response): Promise<void> => {
@@ -244,15 +193,7 @@ export function createCreatePRHandler() {
       }
 
       // Check if gh CLI is available (cross-platform)
-      try {
-        const checkCommand = process.platform === "win32"
-          ? "where gh"
-          : "command -v gh";
-        await execAsync(checkCommand, { env: execEnv });
-        ghCliAvailable = true;
-      } catch {
-        ghCliAvailable = false;
-      }
+      ghCliAvailable = await isGhCliAvailable();
 
       // Construct browser URL for PR creation
       if (repoUrl) {

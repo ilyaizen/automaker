@@ -6,6 +6,9 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 
+/** Maximum length for sanitized branch names in filesystem paths */
+const MAX_SANITIZED_BRANCH_PATH_LENGTH = 200;
+
 export interface WorktreePRInfo {
   number: number;
   url: string;
@@ -36,7 +39,7 @@ function sanitizeBranchName(branch: string): string {
     .replace(/^-|-$/g, "");         // Remove leading/trailing dashes
 
   // Truncate to safe length (leave room for path components)
-  safeBranch = safeBranch.substring(0, 200);
+  safeBranch = safeBranch.substring(0, MAX_SANITIZED_BRANCH_PATH_LENGTH);
 
   // Handle Windows reserved names (CON, PRN, AUX, NUL, COM1-9, LPT1-9)
   const windowsReserved = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;

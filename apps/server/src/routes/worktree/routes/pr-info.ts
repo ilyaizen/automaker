@@ -3,53 +3,14 @@
  */
 
 import type { Request, Response } from "express";
-import { exec } from "child_process";
-import { promisify } from "util";
-import { getErrorMessage, logError } from "../common.js";
-
-const execAsync = promisify(exec);
-
-// Extended PATH to include common tool installation locations
-const pathSeparator = process.platform === "win32" ? ";" : ":";
-const additionalPaths: string[] = [];
-
-if (process.platform === "win32") {
-  if (process.env.LOCALAPPDATA) {
-    additionalPaths.push(`${process.env.LOCALAPPDATA}\\Programs\\Git\\cmd`);
-  }
-  if (process.env.PROGRAMFILES) {
-    additionalPaths.push(`${process.env.PROGRAMFILES}\\Git\\cmd`);
-  }
-  if (process.env["ProgramFiles(x86)"]) {
-    additionalPaths.push(`${process.env["ProgramFiles(x86)"]}\\Git\\cmd`);
-  }
-} else {
-  additionalPaths.push(
-    "/opt/homebrew/bin",
-    "/usr/local/bin",
-    "/home/linuxbrew/.linuxbrew/bin",
-    `${process.env.HOME}/.local/bin`,
-  );
-}
-
-const extendedPath = [
-  process.env.PATH,
-  ...additionalPaths.filter(Boolean),
-].filter(Boolean).join(pathSeparator);
-
-const execEnv = {
-  ...process.env,
-  PATH: extendedPath,
-};
-
-/**
- * Validate branch name to prevent command injection.
- * Git branch names cannot contain: space, ~, ^, :, ?, *, [, \, or control chars.
- * We also reject shell metacharacters for safety.
- */
-function isValidBranchName(name: string): boolean {
-  return /^[a-zA-Z0-9._\-/]+$/.test(name) && name.length < 250;
-}
+import {
+  getErrorMessage,
+  logError,
+  execAsync,
+  execEnv,
+  isValidBranchName,
+  isGhCliAvailable,
+} from "../common.js";
 
 export interface PRComment {
   id: number;
@@ -98,16 +59,7 @@ export function createPRInfoHandler() {
       }
 
       // Check if gh CLI is available
-      let ghCliAvailable = false;
-      try {
-        const checkCommand = process.platform === "win32"
-          ? "where gh"
-          : "command -v gh";
-        await execAsync(checkCommand, { env: execEnv });
-        ghCliAvailable = true;
-      } catch {
-        ghCliAvailable = false;
-      }
+      const ghCliAvailable = await isGhCliAvailable();
 
       if (!ghCliAvailable) {
         res.json({

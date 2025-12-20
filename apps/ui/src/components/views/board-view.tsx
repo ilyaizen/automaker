@@ -58,6 +58,9 @@ const EMPTY_WORKTREES: ReturnType<
   ReturnType<typeof useAppStore.getState>["getWorktrees"]
 > = [];
 
+/** Delay before starting a newly created feature to allow state to settle */
+const FEATURE_CREATION_SETTLE_DELAY_MS = 500;
+
 export function BoardView() {
   const {
     currentProject,
@@ -458,7 +461,7 @@ export function BoardView() {
         if (newFeature) {
           await handleStartImplementation(newFeature);
         }
-      }, 500);
+      }, FEATURE_CREATION_SETTLE_DELAY_MS);
     },
     [handleAddFeature, handleStartImplementation, defaultSkipTests]
   );

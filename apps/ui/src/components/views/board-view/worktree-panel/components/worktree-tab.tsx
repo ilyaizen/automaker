@@ -130,7 +130,6 @@ export function WorktreeTab({
       }
     })();
 
-    const prTitle = worktree.pr.title || `Pull Request #${worktree.pr.number}`;
     const prLabel = `Pull Request #${worktree.pr.number}, ${prState}${worktree.pr.title ? `: ${worktree.pr.title}` : ""}`;
 
     // Helper to get status icon color for the selected state
