@@ -27,7 +27,7 @@ test.describe('Project Creation', () => {
 
     await setupWelcomeView(page, { workspaceDir: TEST_TEMP_DIR });
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
 
     await expect(page.locator('[data-testid="welcome-view"]')).toBeVisible({ timeout: 10000 });
 

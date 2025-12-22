@@ -75,7 +75,7 @@ test.describe('Open Project', () => {
 
     // Navigate to the app
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
 
     // Wait for welcome view to be visible
     await expect(page.locator('[data-testid="welcome-view"]')).toBeVisible({ timeout: 10000 });

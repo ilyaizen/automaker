@@ -1,11 +1,13 @@
 import { Page, Locator } from '@playwright/test';
 
 /**
- * Wait for the page to reach network idle state
- * This is commonly used after navigation or page reload to ensure all network requests have completed
+ * Wait for the page to load
+ * Uses 'load' state instead of 'networkidle' because the app has persistent
+ * connections (websockets/polling) that prevent network from ever being idle.
+ * Tests should wait for specific elements to verify page is ready.
  */
 export async function waitForNetworkIdle(page: Page): Promise<void> {
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
 }
 
 /**

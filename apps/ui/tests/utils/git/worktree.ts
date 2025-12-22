@@ -479,7 +479,7 @@ export async function waitForBoardView(page: Page): Promise<void> {
   const currentUrl = page.url();
   if (!currentUrl.includes('/board')) {
     await page.goto('/board');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('load');
   }
 
   // Wait for either board-view (success) or board-view-no-project (store not hydrated yet)

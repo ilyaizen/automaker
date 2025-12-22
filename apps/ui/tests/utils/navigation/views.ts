@@ -9,7 +9,7 @@ import { waitForElement } from '../core/waiting';
 export async function navigateToBoard(page: Page): Promise<void> {
   // Navigate directly to /board route
   await page.goto('/board');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
 
   // Wait for the board view to be visible
   await waitForElement(page, 'board-view', { timeout: 10000 });
@@ -22,7 +22,7 @@ export async function navigateToBoard(page: Page): Promise<void> {
 export async function navigateToContext(page: Page): Promise<void> {
   // Navigate directly to /context route
   await page.goto('/context');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
 
   // Wait for loading to complete (if present)
   const loadingElement = page.locator('[data-testid="context-view-loading"]');
@@ -47,7 +47,7 @@ export async function navigateToContext(page: Page): Promise<void> {
 export async function navigateToSpec(page: Page): Promise<void> {
   // Navigate directly to /spec route
   await page.goto('/spec');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
 
   // Wait for loading state to complete first (if present)
   const loadingElement = page.locator('[data-testid="spec-view-loading"]');
@@ -77,7 +77,7 @@ export async function navigateToSpec(page: Page): Promise<void> {
 export async function navigateToAgent(page: Page): Promise<void> {
   // Navigate directly to /agent route
   await page.goto('/agent');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
 
   // Wait for the agent view to be visible
   await waitForElement(page, 'agent-view', { timeout: 10000 });
@@ -90,7 +90,7 @@ export async function navigateToAgent(page: Page): Promise<void> {
 export async function navigateToSettings(page: Page): Promise<void> {
   // Navigate directly to /settings route
   await page.goto('/settings');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
 
   // Wait for the settings view to be visible
   await waitForElement(page, 'settings-view', { timeout: 10000 });
@@ -105,7 +105,7 @@ export async function navigateToSetup(page: Page): Promise<void> {
   const { setupFirstRun } = await import('../project/setup');
   await setupFirstRun(page);
   await page.goto('/');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   await waitForElement(page, 'setup-view', { timeout: 10000 });
 }
 
@@ -114,7 +114,7 @@ export async function navigateToSetup(page: Page): Promise<void> {
  */
 export async function navigateToWelcome(page: Page): Promise<void> {
   await page.goto('/');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   await waitForElement(page, 'welcome-view', { timeout: 10000 });
 }
 

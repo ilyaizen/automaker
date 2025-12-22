@@ -89,12 +89,25 @@ await expect(page.locator('[data-testid="welcome-view"]')).toBeVisible({ timeout
 await page.waitForSelector('[data-testid="welcome-view"]');
 ```
 
-### Wait for network idle after navigation
+### Wait for page load after navigation
+
+**Important:** Use `load` state, NOT `networkidle`. This app has persistent connections (websockets, polling) that prevent the network from ever becoming "idle", causing `networkidle` to timeout.
 
 ```typescript
 await page.goto('/');
-await page.waitForLoadState('networkidle');
+await page.waitForLoadState('load');
+
+// Then wait for specific elements to verify the page is ready
+await expect(page.locator('[data-testid="board-view"]')).toBeVisible({ timeout: 10000 });
 ```
+
+**Why not `networkidle`?**
+
+- `networkidle` requires no network activity for 500ms
+- Modern SPAs with real-time features (websockets, polling, SSE) never reach this state
+- Using `networkidle` causes 30+ second timeouts and flaky tests
+- The `load` state fires when the page finishes loading, which is sufficient
+- Always follow up with element visibility checks for reliability
 
 ### Use appropriate timeouts
 
@@ -267,6 +280,29 @@ npm run test -- project-creation.spec.ts --repeat-each=5
 3. Run with `--headed` to watch the test
 4. Add `await page.pause()` to pause execution at a specific point
 
+## Common Pitfalls
+
+### Timeout on `waitForLoadState('networkidle')`
+
+If tests timeout waiting for network idle, the app likely has persistent connections. Use `load` state instead:
+
+```typescript
+// Bad - will timeout with persistent connections
+await page.waitForLoadState('networkidle');
+
+// Good - completes when page loads
+await page.waitForLoadState('load');
+await expect(page.locator('[data-testid="my-element"]')).toBeVisible();
+```
+
+### Port conflicts
+
+If you see "Port 3008 is already in use", kill the process:
+
+```bash
+lsof -ti:3008 | xargs kill -9
+```
+
 ## Available Test Utilities
 
 Import from `./utils`:
@@ -290,8 +326,9 @@ Import from `./utils`:
 
 ### Waiting Utilities
 
-- `waitForNetworkIdle(page)` - Wait for network to be idle
+- `waitForNetworkIdle(page)` - Wait for page to load (uses `load` state, not `networkidle`)
 - `waitForElement(page, testId)` - Wait for element by test ID
+- `waitForBoardView(page)` - Navigate to board and wait for it to be visible
 
 ### Async File Verification
 
