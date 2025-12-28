@@ -37,18 +37,10 @@ export function createTestServerHandler(mcpTestService: MCPTestService) {
         return;
       }
 
-      let result;
-      if (body.serverId) {
-        result = await mcpTestService.testServerById(body.serverId);
-      } else if (body.serverConfig) {
-        result = await mcpTestService.testServer(body.serverConfig);
-      } else {
-        res.status(400).json({
-          success: false,
-          error: 'Invalid request',
-        });
-        return;
-      }
+      // At this point, we know at least one of serverId or serverConfig is truthy
+      const result = body.serverId
+        ? await mcpTestService.testServerById(body.serverId)
+        : await mcpTestService.testServer(body.serverConfig!);
 
       res.json(result);
     } catch (error) {
