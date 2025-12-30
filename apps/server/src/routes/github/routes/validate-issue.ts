@@ -38,6 +38,73 @@ import { getAutoLoadClaudeMdSetting } from '../../../lib/settings-helpers.js';
 const VALID_CLAUDE_MODELS: readonly ModelAlias[] = ['opus', 'sonnet', 'haiku'] as const;
 
 /**
+ * Extract JSON from a response that may contain markdown code blocks or other text.
+ * Tries multiple extraction strategies in order of likelihood.
+ */
+function extractJsonFromResponse<T>(responseText: string, log: typeof logger): T | null {
+  const strategies = [
+    // Strategy 1: JSON in ```json code block
+    () => {
+      const match = responseText.match(/```json\s*([\s\S]*?)```/);
+      if (match) {
+        log.debug('Extracting JSON from ```json code block');
+        return JSON.parse(match[1].trim()) as T;
+      }
+      return null;
+    },
+    // Strategy 2: JSON in ``` code block (no language specified)
+    () => {
+      const match = responseText.match(/```\s*([\s\S]*?)```/);
+      if (match) {
+        const content = match[1].trim();
+        // Only try if it looks like JSON (starts with { or [)
+        if (content.startsWith('{') || content.startsWith('[')) {
+          log.debug('Extracting JSON from ``` code block');
+          return JSON.parse(content) as T;
+        }
+      }
+      return null;
+    },
+    // Strategy 3: Find JSON object directly in text (first { to last })
+    () => {
+      const firstBrace = responseText.indexOf('{');
+      const lastBrace = responseText.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        const jsonCandidate = responseText.slice(firstBrace, lastBrace + 1);
+        log.debug('Extracting JSON object from raw text');
+        return JSON.parse(jsonCandidate) as T;
+      }
+      return null;
+    },
+    // Strategy 4: Try parsing the entire response as JSON
+    () => {
+      const trimmed = responseText.trim();
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        log.debug('Parsing entire response as JSON');
+        return JSON.parse(trimmed) as T;
+      }
+      return null;
+    },
+  ];
+
+  for (const strategy of strategies) {
+    try {
+      const result = strategy();
+      if (result !== null) {
+        log.debug('Successfully parsed JSON from Cursor response:', result);
+        return result;
+      }
+    } catch {
+      // Strategy failed, try next one
+    }
+  }
+
+  log.error('Failed to extract JSON from Cursor response after trying all strategies');
+  log.debug('Raw response:', responseText.slice(0, 500) + (responseText.length > 500 ? '...' : ''));
+  return null;
+}
+
+/**
  * Request body for issue validation
  */
 interface ValidateIssueRequestBody {
@@ -136,22 +203,7 @@ ${prompt}`;
 
       // Parse JSON from the response text
       if (responseText) {
-        try {
-          // Try to extract JSON from response (it might be wrapped in markdown code blocks)
-          let jsonStr = responseText;
-
-          // Remove markdown code blocks if present
-          const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
-          if (jsonMatch) {
-            jsonStr = jsonMatch[1].trim();
-          }
-
-          validationResult = JSON.parse(jsonStr) as IssueValidationResult;
-          logger.debug('Parsed validation result from Cursor response:', validationResult);
-        } catch (parseError) {
-          logger.error('Failed to parse JSON from Cursor response:', parseError);
-          logger.debug('Raw response:', responseText);
-        }
+        validationResult = extractJsonFromResponse<IssueValidationResult>(responseText, logger);
       }
     } else {
       // Use Claude SDK for Claude models
